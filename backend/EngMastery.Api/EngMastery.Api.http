@@ -1,0 +1,6 @@
+@EngMastery.Api_HostAddress = http://localhost:5110
+
+GET {{EngMastery.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

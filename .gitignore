@@ -1,0 +1,15 @@
+.vs/
+bin/
+obj/
+out/
+dist-engmastery/
+
+node_modules/
+frontend/dist/
+
+*.db
+*.db-shm
+*.db-wal
+
+.env
+appsettings.Production.json

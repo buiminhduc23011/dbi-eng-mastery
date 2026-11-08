@@ -1,0 +1,43 @@
+name: engmastery
+
+services:
+  backend:
+    build: ./backend
+    container_name: engmastery-api
+    restart: unless-stopped
+    environment:
+      # SQLite (default, zero-config). Data persisted in ./data volume.
+      - ConnectionStrings__Sqlite=Data Source=/app/data/engmastery.db
+      - Database__Provider=sqlite
+      # --- SQL Server alternative: uncomment + set password, and switch provider ---
+      # - Database__Provider=sqlserver
+      # - ConnectionStrings__SqlServer=Server=mssql,1433;Database=EngMastery;User Id=sa;Password=ChangeMe_12345;TrustServerCertificate=True
+    ports:
+      - "8090:8090"
+    volumes:
+      - ./data:/app/data
+
+  frontend:
+    build: ./frontend
+    container_name: engmastery-web
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "8091:80"
+
+  # --- Optional SQL Server (only if you switch provider above) ---
+  # mssql:
+  #   image: mcr.microsoft.com/mssql/server:2022-latest
+  #   container_name: engmastery-mssql
+  #   restart: unless-stopped
+  #   environment:
+  #     - ACCEPT_EULA=Y
+  #     - SA_PASSWORD=ChangeMe_12345
+  #   ports:
+  #     - "1433:1433"
+  #   volumes:
+  #     - mssqldata:/var/opt/mssql
+
+# volumes:
+#   mssqldata:
