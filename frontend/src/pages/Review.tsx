@@ -1,7 +1,18 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, type VocabCard } from '../lib/api';
 import { speak } from '../lib/speech';
-import { Volume2, RotateCcw, Keyboard } from 'lucide-react';
+import {
+  Volume2,
+  RotateCcw,
+  Sparkles,
+  CheckCircle2,
+  AlertCircle,
+  ThumbsUp,
+  Layers,
+  HelpCircle,
+  ArrowRight,
+  SlidersHorizontal,
+} from 'lucide-react';
 
 type Mode = 'flip' | 'cloze';
 
@@ -15,14 +26,24 @@ function accuracy(a: string, b: string): number {
   const d: number[][] = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)]);
   for (let j = 0; j <= n; j++) d[0][j] = j;
   for (let i = 1; i <= m; i++)
-    for (let j = 1; j <= n; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
-  return 1 - d[m][n] / Math.max(m, n);
+    for (let j = 1; j <= n; j++)
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  return Math.max(0, 1 - d[m][n] / Math.max(m, n));
 }
 
-const RATING_LABEL = ['', 'Again', 'Hard', 'Good', 'Easy'];
-const RATING_STYLE = ['', 'bg-red-600 hover:bg-red-700', 'bg-amber-600 hover:bg-amber-700', 'bg-emerald-600 hover:bg-emerald-700', 'bg-sky-600 hover:bg-sky-700'];
+const RATING_CONFIG = [
+  null,
+  { label: 'Again', sub: 'Quên hẳn', icon: RotateCcw, color: 'bg-rose-500 hover:bg-rose-600 text-white shadow-rose-500/25' },
+  { label: 'Hard', sub: 'Hơi khó', icon: AlertCircle, color: 'bg-amber-500 hover:bg-amber-600 text-white shadow-amber-500/25' },
+  { label: 'Good', sub: 'Nhớ tốt', icon: ThumbsUp, color: 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/25' },
+  { label: 'Easy', sub: 'Rất dễ', icon: Sparkles, color: 'bg-sky-600 hover:bg-sky-700 text-white shadow-sky-600/25' },
+] as const;
 
-export default function Review() {
+interface Props {
+  onSessionComplete?: () => void;
+}
+
+export default function Review({ onSessionComplete }: Props) {
   const [mode, setMode] = useState<Mode>('flip');
   const [category, setCategory] = useState('');
   const [categories, setCategories] = useState<string[]>([]);
@@ -34,6 +55,7 @@ export default function Review() {
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
   const [rateError, setRateError] = useState('');
+  const [isSpeaking, setIsSpeaking] = useState(false);
 
   const card = queue[index];
 
@@ -59,17 +81,30 @@ export default function Review() {
     load('');
   }, [load]);
 
+  const playAudio = (text: string) => {
+    setIsSpeaking(true);
+    speak(text);
+    setTimeout(() => setIsSpeaking(false), 1200);
+  };
+
   const rate = useCallback(
     async (q: 1 | 2 | 3 | 4) => {
-      if (!card || (mode === 'flip' && !flipped)) return;
+      if (!card) return;
+      if (mode === 'flip' && !flipped) {
+        setFlipped(true);
+        return;
+      }
       if (mode === 'cloze' && !clozeChecked) return;
+
       setRateError('');
       try {
         await api.post(`/srs/${card.id}/review`, { quality: q });
+        onSessionComplete?.();
       } catch {
-        setRateError('Không lưu được điểm — kiểm tra mạng/server rồi thử lại.');
+        setRateError('Không lưu được điểm ôn — vui lòng thử lại.');
         return;
       }
+
       if (index + 1 >= queue.length) {
         setDone(true);
       } else {
@@ -79,13 +114,13 @@ export default function Review() {
         setClozeChecked(false);
       }
     },
-    [card, flipped, clozeChecked, index, queue.length, mode],
+    [card, flipped, clozeChecked, index, queue.length, mode, onSessionComplete],
   );
 
   const speakFor = useCallback(
     (c: VocabCard, isBack: boolean) => {
-      if (mode === 'flip') speak(isBack ? c.exampleSentence || c.term : c.term);
-      else speak(c.exampleSentence || c.term);
+      if (mode === 'flip') playAudio(isBack ? c.exampleSentence || c.term : c.term);
+      else playAudio(c.exampleSentence || c.term);
     },
     [mode],
   );
@@ -96,9 +131,12 @@ export default function Review() {
       if (e.code === 'Space') {
         e.preventDefault();
         if (mode === 'flip') setFlipped((f) => !f);
-      } else if (e.key === 'Enter' && mode === 'flip' && !(e.target instanceof HTMLButtonElement)) {
+      } else if (e.key === 'Enter') {
         e.preventDefault();
-        setFlipped((f) => !f);
+        if (mode === 'flip') {
+          if (!flipped) setFlipped(true);
+          else void rate(3); // Enter default Good
+        }
       } else if (e.key >= '1' && e.key <= '4') {
         void rate(Number(e.key) as 1 | 2 | 3 | 4);
       } else if (e.key === 'r' || e.key === 'R') {
@@ -118,8 +156,11 @@ export default function Review() {
       <>
         {parts.map((p, i) =>
           /^_+$/.test(p) ? (
-            <span key={i} className="rounded bg-indigo-200 px-2 font-mono font-bold text-indigo-900 dark:bg-indigo-900 dark:text-indigo-100">
-              {clozeChecked ? c.term : p}
+            <span
+              key={i}
+              className="mx-1 inline-block rounded-lg bg-indigo-100 px-2.5 py-0.5 font-mono font-bold text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 ring-2 ring-indigo-400/40"
+            >
+              {clozeChecked ? c.term : '______'}
             </span>
           ) : (
             <span key={i}>{p}</span>
@@ -129,173 +170,351 @@ export default function Review() {
     );
   };
 
+  const progress = queue.length > 0 ? Math.round(((index + 1) / queue.length) * 100) : 0;
+
   return (
-    <div className="mx-auto max-w-2xl space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="flex rounded-lg bg-white p-1 shadow-sm dark:bg-slate-900">
-          {(['flip', 'cloze'] as Mode[]).map((m) => (
-            <button
-              key={m}
-              onClick={() => {
-                setMode(m);
-                setFlipped(false);
-                setAnswer('');
-                setClozeChecked(false);
-              }}
-              className={`rounded-md px-4 py-1.5 text-sm font-semibold ${mode === m ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}
-            >
-              {m === 'flip' ? 'Flip Card' : 'Cloze Recall'}
-            </button>
-          ))}
+    <div className="mx-auto max-w-2xl space-y-3.5 sm:space-y-4">
+      {/* Top Controls Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        {/* Mode Segmented Switch */}
+        <div className="flex rounded-2xl bg-slate-200/80 p-1 dark:bg-slate-800/80 shadow-inner">
+          <button
+            onClick={() => {
+              setMode('flip');
+              setFlipped(false);
+              setAnswer('');
+              setClozeChecked(false);
+            }}
+            className={`rounded-xl px-3.5 py-1.5 text-xs font-bold transition-all ${
+              mode === 'flip'
+                ? 'bg-white text-indigo-600 shadow-sm dark:bg-[#111827] dark:text-indigo-400'
+                : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
+            }`}
+          >
+            Lật thẻ (Flip)
+          </button>
+          <button
+            onClick={() => {
+              setMode('cloze');
+              setFlipped(false);
+              setAnswer('');
+              setClozeChecked(false);
+            }}
+            className={`rounded-xl px-3.5 py-1.5 text-xs font-bold transition-all ${
+              mode === 'cloze'
+                ? 'bg-white text-indigo-600 shadow-sm dark:bg-[#111827] dark:text-indigo-400'
+                : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
+            }`}
+          >
+            Điền từ (Cloze)
+          </button>
         </div>
-        <select
-          value={category}
-          onChange={(e) => {
-            setCategory(e.target.value);
-            void load(e.target.value);
-          }}
-          className="rounded-lg bg-white px-3 py-2 text-sm shadow-sm dark:bg-slate-900"
-        >
-          <option value="">All categories</option>
-          {categories.map((c) => (
-            <option key={c} value={c}>{c}</option>
-          ))}
-        </select>
-        <button onClick={() => load(category)} className="flex items-center gap-1 rounded-lg bg-white px-3 py-2 text-sm shadow-sm dark:bg-slate-900" title="Reload due cards">
-          <RotateCcw size={15} /> Reload
-        </button>
+
+        {/* Category & Reload */}
+        <div className="flex items-center gap-1.5 ml-auto">
+          <div className="relative">
+            <select
+              value={category}
+              onChange={(e) => {
+                setCategory(e.target.value);
+                void load(e.target.value);
+              }}
+              className="appearance-none rounded-xl border border-slate-200/80 bg-white py-1.5 pl-3 pr-8 text-xs font-semibold shadow-sm dark:border-slate-800 dark:bg-[#111827]"
+            >
+              <option value="">Tất cả chủ đề</option>
+              {categories.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+            <SlidersHorizontal size={13} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+          </div>
+
+          <button
+            onClick={() => load(category)}
+            className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200/80 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50 dark:border-slate-800 dark:bg-[#111827] dark:text-slate-300"
+            title="Tải lại danh sách thẻ đến hạn"
+          >
+            <RotateCcw size={14} />
+          </button>
+        </div>
       </div>
 
-      {loading && <div className="p-8 text-center text-slate-500">Loading due cards…</div>}
-
-      {!loading && done && (
-        <div className="rounded-xl bg-emerald-100 p-10 text-center dark:bg-emerald-950">
-          <div className="text-3xl">🎉</div>
-          <h2 className="mt-2 text-xl font-bold text-emerald-800 dark:text-emerald-200">Session complete!</h2>
-          <p className="text-sm text-emerald-700 dark:text-emerald-300">No more due cards. Come back tomorrow — SM-2 schedules the rest.</p>
-          <button onClick={() => load(category)} className="mt-4 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white">
-            Check again
-          </button>
+      {/* Loading State */}
+      {loading && (
+        <div className="flex min-h-[50vh] flex-col items-center justify-center rounded-3xl border border-slate-200/80 bg-white p-8 text-center dark:border-slate-800/80 dark:bg-[#111827]">
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent" />
+          <div className="mt-3 text-sm font-semibold text-slate-600 dark:text-slate-400">Đang chuẩn bị thẻ ôn tập…</div>
         </div>
       )}
 
+      {/* Session Completed State */}
+      {!loading && done && (
+        <div className="rounded-3xl border border-emerald-200/80 bg-gradient-to-br from-emerald-50 via-teal-50 to-white p-8 text-center shadow-sm dark:border-emerald-900/60 dark:from-emerald-950/40 dark:via-[#111827] dark:to-[#111827]">
+          <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-100 text-3xl shadow-inner dark:bg-emerald-900/60">
+            🎉
+          </div>
+          <h2 className="mt-4 text-xl font-black text-emerald-800 dark:text-emerald-200">
+            Hoàn thành xuất sắc phiên ôn tập!
+          </h2>
+          <p className="mx-auto mt-1.5 max-w-md text-xs sm:text-sm text-emerald-700/90 dark:text-emerald-300/90">
+            Bạn đã ôn tập xong toàn bộ thẻ đến hạn hôm nay. Hãy quay lại vào ngày mai nhé!
+          </p>
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+            <button
+              onClick={() => load(category)}
+              className="flex items-center gap-2 rounded-2xl bg-emerald-600 px-5 py-2.5 text-xs font-bold text-white shadow-md shadow-emerald-600/25 transition hover:bg-emerald-700 active:scale-95"
+            >
+              <RotateCcw size={14} /> Kiểm tra thẻ mới
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Active Card Studying */}
       {!loading && !done && card && (
         <>
-          <div className="flex items-center justify-between text-sm text-slate-500">
-            <span>Card {index + 1} / {queue.length}</span>
-            <span className="flex items-center gap-1"><Keyboard size={14} /> Space flip · 1-4 rate · R audio</span>
+          {/* Progress Header */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between text-xs font-bold text-slate-500 dark:text-slate-400">
+              <span className="flex items-center gap-1.5">
+                <Layers size={14} className="text-indigo-600 dark:text-indigo-400" />
+                Thẻ {index + 1} / {queue.length}
+              </span>
+              <span className="hidden sm:inline-block font-normal text-[11px] text-slate-400">
+                Space lật · 1-4 chấm điểm · R nghe
+              </span>
+              <span className="font-extrabold text-indigo-600 dark:text-indigo-400">{progress}%</span>
+            </div>
+            {/* Visual Progress Bar */}
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-indigo-600 to-violet-500 transition-all duration-300"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
           </div>
 
+          {/* Flashcard Component */}
           {mode === 'flip' ? (
-            <div className="perspective-1000">
+            <div className="perspective-1000 select-none">
               <div
                 onClick={() => setFlipped((f) => !f)}
-                className={`preserve-3d relative min-h-72 cursor-pointer rounded-2xl bg-white shadow-md transition-transform duration-500 dark:bg-slate-900 ${flipped ? 'rotate-y-180' : ''}`}
+                className={`preserve-3d relative min-h-[350px] sm:min-h-[380px] cursor-pointer rounded-3xl border border-slate-200/80 bg-white p-6 shadow-md transition-all duration-500 hover:shadow-lg dark:border-slate-800/80 dark:bg-[#111827] ${
+                  flipped ? 'rotate-y-180' : ''
+                }`}
               >
-                <div className="backface-hidden flex min-h-72 flex-col items-center justify-center gap-2 p-8 text-center">
-                  <span className="rounded-full bg-indigo-100 px-3 py-0.5 text-xs font-semibold text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">
-                    {card.category} · {card.status}
-                  </span>
-                  <div className="text-4xl font-bold">{card.term}</div>
-                  <div className="text-slate-500">{card.phonetic}</div>
-                  <div className="mt-1 text-lg text-slate-600 dark:text-slate-300">{card.meaningVi}</div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      speak(card.term);
-                    }}
-                    className="mt-2 flex items-center gap-1 rounded-lg bg-slate-200 px-3 py-1.5 text-sm dark:bg-slate-700"
-                  >
-                    <Volume2 size={15} /> Nghe từ (R)
-                  </button>
-                  <div className="mt-4 text-xs text-slate-400">Click or press Space to reveal</div>
+                {/* Front Side */}
+                <div className="backface-hidden flex min-h-[300px] sm:min-h-[330px] flex-col items-center justify-between text-center">
+                  <div className="flex w-full items-center justify-between">
+                    <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700 dark:bg-indigo-950/80 dark:text-indigo-300">
+                      {card.category}
+                    </span>
+                    <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                      {card.status}
+                    </span>
+                  </div>
+
+                  <div className="my-auto py-4 space-y-2">
+                    <div className="text-3xl sm:text-4xl font-black tracking-tight text-slate-900 dark:text-white">
+                      {card.term}
+                    </div>
+                    {card.phonetic && (
+                      <div className="font-mono text-sm text-indigo-600 dark:text-indigo-400">
+                        {card.phonetic}
+                      </div>
+                    )}
+                    <div className="text-lg sm:text-xl font-medium text-slate-700 dark:text-slate-200 pt-1">
+                      {card.meaningVi}
+                    </div>
+
+                    <div className="pt-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          playAudio(card.term);
+                        }}
+                        className={`inline-flex items-center gap-1.5 rounded-2xl border border-slate-200 bg-slate-100/80 px-4 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 active:scale-95 dark:border-slate-800 dark:bg-slate-800/80 dark:text-slate-200 ${
+                          isSpeaking ? 'ring-2 ring-indigo-500' : ''
+                        }`}
+                      >
+                        <Volume2 size={16} className={isSpeaking ? 'animate-bounce text-indigo-600' : ''} />
+                        <span>Nghe từ (R)</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1 text-xs font-medium text-slate-400">
+                    <HelpCircle size={14} />
+                    <span>Chạm vào thẻ để xem định nghĩa & ví dụ câu</span>
+                  </div>
                 </div>
-                <div className="backface-hidden rotate-y-180 absolute inset-0 flex min-h-72 flex-col items-center justify-center gap-2 rounded-2xl bg-white p-8 text-center shadow-md dark:bg-slate-900">
-                  <div className="text-sm italic text-slate-600 dark:text-slate-300">“{card.definitionEn}”</div>
-                  <div className="text-base">📌 {card.exampleSentence}</div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      speak(card.exampleSentence || card.term);
-                    }}
-                    className="mt-1 flex items-center gap-1 rounded-lg bg-slate-200 px-3 py-1.5 text-sm dark:bg-slate-700"
-                  >
-                    <Volume2 size={15} /> Listen (R)
-                  </button>
-                  <div className="mt-1 text-xs text-slate-400">EF {card.easeFactor} · ×{card.intervalDays}d · rep {card.repetition} · ❌{card.mistakeCount}</div>
+
+                {/* Back Side */}
+                <div className="backface-hidden rotate-y-180 absolute inset-0 flex flex-col justify-between rounded-3xl bg-white p-6 shadow-md dark:bg-[#111827]">
+                  <div className="flex w-full items-center justify-between">
+                    <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-950/80 dark:text-emerald-300">
+                      Đáp án & Ví dụ ngữ cảnh
+                    </span>
+                    <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                      {card.category}
+                    </span>
+                  </div>
+
+                  <div className="my-auto py-4 space-y-3.5 text-center">
+                    {card.definitionEn && (
+                      <div className="rounded-2xl bg-slate-50 p-3.5 text-xs sm:text-sm italic text-slate-600 dark:bg-slate-800/50 dark:text-slate-300 leading-relaxed">
+                        &ldquo;{card.definitionEn}&rdquo;
+                      </div>
+                    )}
+
+                    <div className="text-sm sm:text-base font-medium text-slate-800 dark:text-slate-100 leading-relaxed px-2">
+                      📌 {card.exampleSentence}
+                    </div>
+
+                    <div className="pt-1">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          playAudio(card.exampleSentence || card.term);
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-2xl border border-slate-200 bg-slate-100/80 px-4 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200 active:scale-95 dark:border-slate-800 dark:bg-slate-800/80 dark:text-slate-200"
+                      >
+                        <Volume2 size={16} />
+                        <span>Nghe cả câu (R)</span>
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
           ) : (
-            <div className="rounded-2xl bg-white p-6 shadow-md dark:bg-slate-900">
-              <span className="rounded-full bg-indigo-100 px-3 py-0.5 text-xs font-semibold text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">
-                {card.category}
-              </span>
-              <div className="mt-3 text-xl">{card.meaningVi}</div>
-              <div className="mt-2 text-lg leading-relaxed">{highlightedCloze(card)}</div>
-              {card.clozeHint && <div className="mt-2 text-sm text-slate-500">💡 Hint: {card.clozeHint}</div>}
-              <div className="mt-4 flex gap-2">
+            /* Cloze Mode */
+            <div className="rounded-3xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-md dark:border-slate-800/80 dark:bg-[#111827]">
+              <div className="flex items-center justify-between">
+                <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700 dark:bg-indigo-950/80 dark:text-indigo-300">
+                  {card.category}
+                </span>
+                <button
+                  onClick={() => playAudio(card.exampleSentence || card.term)}
+                  className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                >
+                  <Volume2 size={16} />
+                </button>
+              </div>
+
+              <div className="mt-3">
+                <div className="text-lg sm:text-xl font-bold text-slate-800 dark:text-slate-100">
+                  {card.meaningVi}
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-2xl bg-slate-50 p-4 dark:bg-slate-800/40">
+                <div className="text-base sm:text-lg leading-relaxed text-slate-900 dark:text-white">
+                  {highlightedCloze(card)}
+                </div>
+                {card.clozeHint && (
+                  <div className="mt-2.5 flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400 font-medium">
+                    <Sparkles size={13} />
+                    <span>Gợi ý: {card.clozeHint}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-4 space-y-2">
                 <input
                   value={answer}
                   onChange={(e) => setAnswer(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !clozeChecked) setClozeChecked(true);
+                    if (e.key === 'Enter' && !clozeChecked && answer.trim()) setClozeChecked(true);
                   }}
-                  placeholder="Type the missing word…"
-                  className="flex-1 rounded-lg border border-slate-300 bg-transparent px-3 py-2 dark:border-slate-700"
+                  placeholder="Gõ từ còn thiếu vào đây…"
+                  className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-base shadow-sm focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900"
                 />
-                <button
-                  onClick={() => speak(card.exampleSentence || card.term)}
-                  className="rounded-lg bg-slate-200 px-3 dark:bg-slate-700"
-                  title="Listen"
-                >
-                  <Volume2 size={17} />
-                </button>
+
+                {!clozeChecked ? (
+                  <button
+                    onClick={() => setClozeChecked(true)}
+                    disabled={!answer.trim()}
+                    className="w-full rounded-2xl bg-indigo-600 py-3 text-sm font-bold text-white shadow-md shadow-indigo-600/25 transition hover:bg-indigo-700 disabled:opacity-40"
+                  >
+                    Kiểm tra đáp án (Enter)
+                  </button>
+                ) : (
+                  <div
+                    className={`rounded-2xl p-4 text-sm ${
+                      clozeAcc >= 0.95
+                        ? 'bg-emerald-50 border border-emerald-200 text-emerald-900 dark:bg-emerald-950/60 dark:border-emerald-900/60 dark:text-emerald-200'
+                        : 'bg-amber-50 border border-amber-200 text-amber-900 dark:bg-amber-950/60 dark:border-amber-900/60 dark:text-amber-200'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 font-bold text-base">
+                      {clozeAcc >= 0.95 ? (
+                        <>
+                          <CheckCircle2 size={18} className="text-emerald-600 dark:text-emerald-400" />
+                          <span>Chính xác tuyệt đối!</span>
+                        </>
+                      ) : (
+                        <>
+                          <AlertCircle size={18} className="text-amber-600 dark:text-amber-400" />
+                          <span>Chưa hoàn toàn chuẩn xác</span>
+                        </>
+                      )}
+                    </div>
+                    <div className="mt-2 text-xs sm:text-sm">
+                      Bạn gõ: <span className="font-bold underline">{answer}</span> ({Math.round(clozeAcc * 100)}% giống)
+                      <br />
+                      Đáp án đúng: <span className="font-bold text-indigo-600 dark:text-indigo-400">{card.term}</span>
+                    </div>
+                    <div className="mt-2 text-xs font-semibold">
+                      Gợi ý: <span className="font-extrabold">{RATING_CONFIG[suggested]?.label}</span>
+                    </div>
+                  </div>
+                )}
               </div>
-              {!clozeChecked ? (
-                <button
-                  onClick={() => setClozeChecked(true)}
-                  disabled={!answer.trim()}
-                  className="mt-3 w-full rounded-lg bg-indigo-600 py-2 font-semibold text-white disabled:opacity-40"
-                >
-                  Check (Enter)
-                </button>
-              ) : (
-                <div className={`mt-3 rounded-lg p-3 text-sm ${clozeAcc === 1 ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200' : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200'}`}>
-                  {clozeAcc === 1 ? (
-                    <>✅ Exact match!</>
-                  ) : (
-                    <>
-                      Your answer: <b>{answer}</b> ({Math.round(clozeAcc * 100)}% similar) — correct: <b>{card.term}</b>
-                    </>
-                  )}
-                  <div className="mt-1">Suggested rating: <b>{RATING_LABEL[suggested]}</b> ({suggested})</div>
-                </div>
-              )}
             </div>
           )}
 
+          {/* Rating Error Alert */}
           {rateError && (
-            <div className="rounded-lg bg-red-100 p-3 text-center text-sm font-semibold text-red-700 dark:bg-red-950 dark:text-red-300">
+            <div className="rounded-2xl bg-red-100 p-3 text-center text-xs font-bold text-red-700 dark:bg-red-950 dark:text-red-300">
               {rateError}
             </div>
           )}
-          <div className="grid grid-cols-4 gap-2">
-            {([1, 2, 3, 4] as const).map((q) => {
-              const enabled = mode === 'flip' ? flipped : clozeChecked;
-              return (
-                <button
-                  key={q}
-                  onClick={() => rate(q)}
-                  disabled={!enabled}
-                  className={`rounded-xl py-3 text-sm font-bold text-white disabled:opacity-30 ${RATING_STYLE[q]} ${mode === 'cloze' && clozeChecked && q === suggested ? 'ring-4 ring-offset-2 ring-indigo-400' : ''}`}
-                >
-                  {q} · {RATING_LABEL[q]}
-                </button>
-              );
-            })}
-          </div>
-          {!flipped && mode === 'flip' && <p className="text-center text-xs text-slate-400">Reveal the card before rating.</p>}
+
+          {/* Thumb Rating Section (Mobile & Desktop) */}
+          {mode === 'flip' && !flipped ? (
+            /* Tap to reveal CTA for easy one-hand thumb use on phone */
+            <button
+              onClick={() => setFlipped(true)}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-indigo-600 py-3.5 text-sm font-bold text-white shadow-lg shadow-indigo-600/30 transition-all hover:bg-indigo-700 active:scale-98"
+            >
+              <span>Lật xem đáp án (Space)</span>
+              <ArrowRight size={16} />
+            </button>
+          ) : (
+            /* 4 Rating Buttons */
+            <div className="grid grid-cols-4 gap-2">
+              {([1, 2, 3, 4] as const).map((q) => {
+                const cfg = RATING_CONFIG[q];
+                const isSuggested = mode === 'cloze' && clozeChecked && q === suggested;
+                return (
+                  <button
+                    key={q}
+                    onClick={() => rate(q)}
+                    className={`group relative flex flex-col items-center justify-center rounded-2xl py-3 px-1.5 font-bold shadow-sm transition-all active:scale-95 ${
+                      cfg.color
+                    } ${isSuggested ? 'ring-4 ring-offset-2 ring-indigo-500' : ''}`}
+                  >
+                    <cfg.icon size={18} className="mb-0.5" />
+                    <span className="text-xs sm:text-sm">{q} · {cfg.label}</span>
+                    <span className="text-[10px] opacity-80 hidden sm:inline-block">{cfg.sub}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </>
       )}
     </div>
