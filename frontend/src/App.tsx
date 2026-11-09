@@ -11,7 +11,7 @@ import {
   Moon,
   Sun,
   Flame,
-  Zap,
+  Target,
   MoreHorizontal,
   X,
   ChevronRight,
@@ -38,17 +38,16 @@ interface TabItem {
 }
 
 const PRIMARY_TABS: TabItem[] = [
-  { id: 'dashboard', label: 'Dashboard', shortLabel: 'Tổng quan', icon: LayoutDashboard },
-  { id: 'review', label: 'SRS Review', shortLabel: 'Ôn tập', icon: Layers, badgeKey: 'cardsDue' },
-  { id: 'typing', label: 'Typing', shortLabel: 'Gõ từ', icon: Keyboard },
-  { id: 'drills', label: 'Sentence Drills', shortLabel: 'Luyện câu', icon: PenLine, badgeKey: 'drillsDue' },
+  { id: 'dashboard', label: 'Tổng quan', shortLabel: 'Tổng quan', icon: LayoutDashboard },
+  { id: 'review', label: 'Ôn tập SRS', shortLabel: 'Ôn tập', icon: Layers, badgeKey: 'cardsDue' },
+  { id: 'drills', label: 'Luyện câu', shortLabel: 'Luyện câu', icon: PenLine, badgeKey: 'drillsDue' },
+  { id: 'typing', label: 'Gõ từ', shortLabel: 'Gõ từ', icon: Keyboard },
 ];
 
 const SECONDARY_TABS: TabItem[] = [
-  { id: 'shadowing', label: 'Shadowing Studio', shortLabel: 'Phát âm', icon: Mic, description: 'Luyện nghe 1.0x / 0.8x và ghi âm so khớp giọng' },
-  { id: 'translator', label: 'AI Translator', shortLabel: 'Dịch AI', icon: Languages, description: 'Dịch công sở/đời sống và lưu cụm từ vào thẻ SRS' },
-  { id: 'cards', label: 'Card Manager', shortLabel: 'Thẻ từ', icon: Library, description: 'Tìm kiếm, sửa, xoá và xuất/nhập file dữ liệu' },
-  { id: 'settings', label: 'Cài đặt', shortLabel: 'Cài đặt', icon: SettingsIcon, description: 'Cấu hình Gemini API key và mục tiêu học tập hàng ngày' },
+  { id: 'shadowing', label: 'Phát âm', shortLabel: 'Phát âm', icon: Mic, description: 'Luyện nghe 1.0x / 0.8x & so khớp giọng nói' },
+  { id: 'translator', label: 'Dịch AI', shortLabel: 'Dịch AI', icon: Languages, description: 'Dịch công sở/đời sống & lưu nhanh vào thẻ SRS' },
+  { id: 'cards', label: 'Kho thẻ', shortLabel: 'Kho thẻ', icon: Library, description: 'Tìm kiếm, sửa, xoá và xuất/nhập dữ liệu' },
 ];
 
 const ALL_TABS: TabItem[] = [...PRIMARY_TABS, ...SECONDARY_TABS];
@@ -96,27 +95,32 @@ export default function App() {
     <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900 transition-colors duration-200 dark:bg-[#0b0f19] dark:text-slate-100">
       {/* Top Header */}
       <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/80 backdrop-blur-md dark:border-slate-800/80 dark:bg-[#0b0f19]/80">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-3 py-2.5 sm:px-4 sm:py-3">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-3 py-2 sm:px-4 sm:py-2.5">
           {/* Logo & Brand */}
-          <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => go('dashboard')}>
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-violet-500 text-white font-extrabold shadow-sm shadow-indigo-500/30">
-              E
-            </div>
+          <div
+            className="flex items-center gap-2.5 cursor-pointer select-none group"
+            onClick={() => go('dashboard')}
+          >
+            <img
+              src="/dbi-logo.svg"
+              alt="DBI"
+              className="h-8 w-8 sm:h-9 sm:w-9 rounded-xl shadow-xs transition-transform group-hover:scale-105"
+            />
             <div>
-              <div className="flex items-center gap-1.5 text-base font-extrabold tracking-tight">
+              <div className="flex items-center gap-1.5 text-sm sm:text-base font-extrabold tracking-tight">
                 EngMastery
-                <span className="hidden rounded-full bg-indigo-100 px-1.5 py-0.2 text-[10px] font-semibold text-indigo-700 dark:bg-indigo-950/80 dark:text-indigo-300 sm:inline-block">
+                <span className="rounded-md bg-indigo-50 px-1.5 py-0.5 text-[10px] font-bold text-indigo-600 dark:bg-indigo-950/70 dark:text-indigo-400">
                   SRS
                 </span>
               </div>
-              <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+              <div className="hidden sm:block text-[10px] font-medium text-slate-500 dark:text-slate-400">
                 Spaced Repetition Lab
               </div>
             </div>
           </div>
 
           {/* Desktop Navigation */}
-          <nav className="hidden items-center gap-1 lg:flex">
+          <nav className="hidden items-center gap-1 md:flex">
             {ALL_TABS.map((t) => {
               const badge = getBadge(t.badgeKey);
               const active = tab === t.id;
@@ -124,19 +128,19 @@ export default function App() {
                 <button
                   key={t.id}
                   onClick={() => go(t.id)}
-                  className={`relative flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition-all ${
+                  className={`relative flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-all ${
                     active
-                      ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/30'
-                      : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800/60'
+                      ? 'bg-slate-900 text-white shadow-sm dark:bg-white dark:text-slate-900'
+                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800/60 dark:hover:text-white'
                   }`}
                 >
-                  <t.icon size={15} />
+                  <t.icon size={14} className={active ? 'stroke-[2.2]' : 'stroke-[1.8]'} />
                   <span>{t.label}</span>
                   {badge && (
                     <span
                       className={`ml-0.5 rounded-full px-1.5 py-0.2 text-[10px] font-bold ${
                         active
-                          ? 'bg-white/20 text-white'
+                          ? 'bg-white/20 text-white dark:bg-slate-900/20 dark:text-slate-900'
                           : 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/60 dark:text-indigo-300'
                       }`}
                     >
@@ -153,41 +157,53 @@ export default function App() {
             {/* Streak Badge */}
             {dashData && dashData.streak > 0 && (
               <div
-                className="flex items-center gap-1 rounded-full bg-gradient-to-r from-orange-500/10 to-amber-500/10 px-2.5 py-1 text-xs font-bold text-orange-600 border border-orange-200/50 dark:border-orange-900/50 dark:text-orange-400"
+                className="flex items-center gap-1 rounded-lg bg-orange-50 px-2 py-1 text-xs font-bold text-orange-600 border border-orange-200/60 dark:border-orange-900/40 dark:bg-orange-950/40 dark:text-orange-400"
                 title={`${dashData.streak} ngày học liên tiếp!`}
               >
-                <Flame size={14} className="fill-orange-500 text-orange-500" />
-                <span>{dashData.streak}</span>
+                <Flame size={13} className="fill-orange-500 text-orange-500" />
+                <span>{dashData.streak}d</span>
               </div>
             )}
 
             {/* Daily Target Progress Pill */}
             {dashData && (
               <div
-                className="hidden sm:flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-800/80 dark:text-slate-300"
-                title="Số thẻ & câu hoàn thành hôm nay / mục tiêu"
+                className="hidden sm:flex items-center gap-1 rounded-lg bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-800/80 dark:text-slate-300"
+                title="Tiến độ mục tiêu hôm nay"
               >
-                <Zap size={13} className="text-amber-500" />
+                <Target size={13} className="text-indigo-500 dark:text-indigo-400" />
                 <span>
                   {dashData.todayReviewed}/{dashData.dailyTarget}
                 </span>
               </div>
             )}
 
+            {/* Settings button */}
+            <button
+              onClick={() => go('settings')}
+              className={`flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200/80 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50 hover:text-slate-900 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white ${
+                tab === 'settings' ? 'ring-2 ring-indigo-500/50' : ''
+              }`}
+              title="Cài đặt hệ thống"
+              aria-label="Cài đặt"
+            >
+              <SettingsIcon size={15} />
+            </button>
+
             {/* Dark / Light Toggle */}
             <button
               onClick={() => setDark((d) => !d)}
-              className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200/80 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+              className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200/80 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50 hover:text-slate-900 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
               aria-label="Toggle theme"
             >
-              {dark ? <Sun size={17} className="text-amber-400" /> : <Moon size={17} />}
+              {dark ? <Sun size={15} className="text-amber-400" /> : <Moon size={15} />}
             </button>
           </div>
         </div>
       </header>
 
       {/* Main Content Area */}
-      <main className="mx-auto w-full max-w-6xl flex-1 px-3 py-4 sm:px-4 sm:py-6 pb-28 md:pb-8">
+      <main className="mx-auto w-full max-w-6xl flex-1 px-3 py-4 sm:px-4 sm:py-6 pb-24 md:pb-8">
         {tab === 'dashboard' && <DashboardPage go={go} onRefresh={refreshDashboard} />}
         {tab === 'review' && <Review onSessionComplete={refreshDashboard} />}
         {tab === 'typing' && <Typing onWordMastered={refreshDashboard} />}
@@ -199,7 +215,7 @@ export default function App() {
       </main>
 
       {/* Desktop Footer */}
-      <footer className="hidden md:block border-t border-slate-200/60 dark:border-slate-800/60 py-5 text-center text-xs text-slate-400 dark:text-slate-500">
+      <footer className="hidden md:block border-t border-slate-200/60 dark:border-slate-800/60 py-4 text-center text-xs text-slate-400 dark:text-slate-500">
         <div className="mx-auto max-w-6xl px-4 flex items-center justify-between">
           <div>EngMastery · Spaced Repetition English Lab</div>
           <div>v2.0</div>
@@ -207,8 +223,8 @@ export default function App() {
       </footer>
 
       {/* Mobile Bottom Navigation Bar (Dock) */}
-      <nav className="fixed bottom-0 inset-x-0 z-40 block lg:hidden border-t border-slate-200/80 bg-white/90 backdrop-blur-xl dark:border-slate-800/80 dark:bg-[#0b0f19]/95 pb-safe">
-        <div className="grid grid-cols-5 h-16 items-center px-1">
+      <nav className="fixed bottom-0 inset-x-0 z-40 block md:hidden border-t border-slate-200/80 bg-white/90 backdrop-blur-xl dark:border-slate-800/80 dark:bg-[#0b0f19]/95 pb-safe">
+        <div className="grid grid-cols-5 h-14 items-center px-1">
           {PRIMARY_TABS.map((t) => {
             const active = tab === t.id;
             const badge = getBadge(t.badgeKey);
@@ -223,20 +239,14 @@ export default function App() {
                 }`}
               >
                 <div className="relative">
-                  <div
-                    className={`flex h-8 w-11 items-center justify-center rounded-full transition-all ${
-                      active ? 'bg-indigo-50 dark:bg-indigo-950/80' : ''
-                    }`}
-                  >
-                    <t.icon size={20} className={active ? 'stroke-[2.4]' : 'stroke-[1.8]'} />
-                  </div>
+                  <t.icon size={18} className={active ? 'stroke-[2.4]' : 'stroke-[1.8]'} />
                   {badge && (
-                    <span className="absolute -top-0.5 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-extrabold text-white shadow-sm ring-2 ring-white dark:ring-[#0b0f19]">
+                    <span className="absolute -top-1.5 -right-2 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-extrabold text-white">
                       {badge}
                     </span>
                   )}
                 </div>
-                <span className="mt-0.5 text-[11px] leading-tight font-medium">{t.shortLabel}</span>
+                <span className="mt-0.5 text-[10px] leading-tight font-medium">{t.shortLabel}</span>
               </button>
             );
           })}
@@ -245,77 +255,68 @@ export default function App() {
           <button
             onClick={() => setSheetOpen((o) => !o)}
             className={`relative flex flex-col items-center justify-center py-1 transition-all active:scale-95 ${
-              isSecondaryActive || sheetOpen
+              isSecondaryActive || sheetOpen || tab === 'settings'
                 ? 'text-indigo-600 dark:text-indigo-400 font-bold'
                 : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
             }`}
           >
-            <div
-              className={`flex h-8 w-11 items-center justify-center rounded-full transition-all ${
-                isSecondaryActive || sheetOpen ? 'bg-indigo-50 dark:bg-indigo-950/80' : ''
-              }`}
-            >
-              <MoreHorizontal size={20} className={isSecondaryActive ? 'stroke-[2.4]' : 'stroke-[1.8]'} />
-            </div>
-            <span className="mt-0.5 text-[11px] leading-tight font-medium">Thêm</span>
+            <MoreHorizontal size={18} />
+            <span className="mt-0.5 text-[10px] leading-tight font-medium">Thêm</span>
           </button>
         </div>
       </nav>
 
       {/* Mobile "More" Sheet Modal */}
       {sheetOpen && (
-        <div className="fixed inset-0 z-50 flex flex-col justify-end lg:hidden">
-          {/* Backdrop */}
+        <div className="fixed inset-0 z-50 flex flex-col justify-end md:hidden">
           <div
             className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm transition-opacity"
             onClick={() => setSheetOpen(false)}
           />
 
-          {/* Bottom Sheet Content */}
-          <div className="relative z-10 rounded-t-3xl border-t border-slate-200/80 bg-white p-5 shadow-2xl dark:border-slate-800/80 dark:bg-[#111827] pb-safe max-h-[85vh] overflow-y-auto">
-            {/* Drag Handle */}
-            <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-slate-300 dark:bg-slate-700" />
+          <div className="relative z-10 rounded-t-2xl border-t border-slate-200/80 bg-white p-4 shadow-2xl dark:border-slate-800/80 dark:bg-[#111827] pb-safe max-h-[85vh] overflow-y-auto">
+            <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-slate-300 dark:bg-slate-700" />
 
-            <div className="mb-4 flex items-center justify-between">
+            <div className="mb-3 flex items-center justify-between">
               <div>
-                <h3 className="text-base font-bold">Tính năng mở rộng</h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Công cụ học tập & cấu hình</p>
+                <h3 className="text-sm font-bold">Tính năng mở rộng</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Công cụ học tập & cài đặt</p>
               </div>
               <button
                 onClick={() => setSheetOpen(false)}
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300"
+                className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300"
               >
-                <X size={18} />
+                <X size={16} />
               </button>
             </div>
 
-            <div className="grid gap-2">
-              {SECONDARY_TABS.map((t) => {
+            <div className="grid gap-1.5">
+              {[...SECONDARY_TABS, { id: 'settings' as TabId, label: 'Cài đặt', shortLabel: 'Cài đặt', icon: SettingsIcon, description: 'Cấu hình Gemini API key và mục tiêu' }].map((t) => {
                 const active = tab === t.id;
                 return (
                   <button
                     key={t.id}
                     onClick={() => go(t.id)}
-                    className={`flex items-center gap-3.5 rounded-2xl p-3.5 text-left transition-all ${
+                    className={`flex items-center gap-3 rounded-xl p-2.5 text-left transition-all ${
                       active
-                        ? 'bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-950/60 dark:text-indigo-200 dark:border-indigo-800/60'
+                        ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-200'
                         : 'bg-slate-50 hover:bg-slate-100 dark:bg-slate-800/40 dark:hover:bg-slate-800/80'
                     }`}
                   >
                     <div
-                      className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${
+                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
                         active
-                          ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/30'
+                          ? 'bg-indigo-600 text-white'
                           : 'bg-white text-slate-700 shadow-sm dark:bg-slate-800 dark:text-slate-200'
                       }`}
                     >
-                      <t.icon size={20} />
+                      <t.icon size={18} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="font-bold text-sm">{t.label}</div>
-                      <div className="truncate text-xs text-slate-500 dark:text-slate-400">{t.description}</div>
+                      <div className="font-bold text-xs">{t.label}</div>
+                      <div className="truncate text-[11px] text-slate-500 dark:text-slate-400">{t.description}</div>
                     </div>
-                    <ChevronRight size={18} className="text-slate-400 shrink-0" />
+                    <ChevronRight size={16} className="text-slate-400 shrink-0" />
                   </button>
                 );
               })}

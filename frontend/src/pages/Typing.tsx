@@ -12,6 +12,7 @@ interface TypingResult {
   requiredStreak: number;
   mastered: boolean;
   countedToday: boolean;
+  nextIntervalDays?: number;
 }
 
 interface Props {
@@ -153,7 +154,7 @@ export default function Typing({ onWordMastered }: Props) {
               {card.category}
             </span>
             <div className="flex items-center gap-2">
-              <span className="text-[11px] font-semibold text-slate-400">Chuỗi ngày:</span>
+              <span className="text-[11px] font-semibold text-slate-400">Cấp độ phản xạ:</span>
               {streakDots(result ? result.streak : card.consecutiveTypingPasses ?? 0, 5)}
             </div>
           </div>
@@ -208,22 +209,27 @@ export default function Typing({ onWordMastered }: Props) {
               }`}
             >
               {result.mastered ? (
-                <div className="text-center py-2">
+                <div className="text-center py-2 space-y-1">
                   <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-100 text-amber-600 dark:bg-amber-900/60">
                     <Trophy size={28} />
                   </div>
-                  <div className="mt-2 text-lg font-black text-emerald-800 dark:text-emerald-200">
-                    🎉 ĐÃ THUỘC LÒNG! (5/5 ngày)
+                  <div className="text-lg font-black text-emerald-800 dark:text-emerald-200">
+                    🎉 ĐÃ THUỘC LÒNG! (Chuỗi 5/5)
+                  </div>
+                  <div className="text-xs text-emerald-700 dark:text-emerald-300">
+                    Từ này đã vào vùng trí nhớ dài hạn. Hệ thống sẽ giãn cách kiểm tra lại sau {result.nextIntervalDays ?? 30} ngày để củng cố.
                   </div>
                 </div>
               ) : result.passed ? (
-                <div className="space-y-1">
+                <div className="space-y-1.5">
                   <div className="flex items-center gap-2 font-bold text-emerald-800 dark:text-emerald-200 text-base">
                     <CheckCircle2 size={18} className="text-emerald-600 dark:text-emerald-400" />
                     <span>Chính xác! Đáp án: <span className="font-mono underline">{result.correctTerm}</span></span>
                   </div>
-                  <div className="text-xs text-emerald-700 dark:text-emerald-300">
-                    Chuỗi: <b>{result.streak}/5 ngày</b> {result.countedToday ? '(+1)' : ''}
+                  <div className="flex flex-wrap items-center gap-2.5 text-xs text-emerald-700 dark:text-emerald-300">
+                    <span>Cấp độ: <b>{result.streak}/5</b></span>
+                    <span>·</span>
+                    <span>Khoảng cách ôn tiếp theo: <b>sau {result.nextIntervalDays ?? (result.streak * 2)} ngày</b></span>
                   </div>
                 </div>
               ) : (
@@ -233,7 +239,7 @@ export default function Typing({ onWordMastered }: Props) {
                     <span>Chưa đúng — Đáp án: <span className="font-mono underline">{result.correctTerm}</span></span>
                   </div>
                   <div className="text-xs text-rose-700 dark:text-rose-300">
-                    Bạn gõ: &ldquo;{input}&rdquo;
+                    Bạn gõ: &ldquo;{input}&rdquo; · Chuỗi bị đặt lại về 0, sẽ hỏi lại vào ngày mai để củng cố.
                   </div>
                 </div>
               )}

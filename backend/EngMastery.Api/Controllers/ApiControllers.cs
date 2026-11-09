@@ -175,22 +175,56 @@ public class TypingController : ControllerBase
         _logs = logs;
     }
 
-    /// <summary>Random card from learned (Learning/Review) deck for typing practice.</summary>
+    /// <summary>
+    /// Exponential spacing intervals for typing:
+    /// Streak 0 -> 1 day
+    /// Streak 1 -> 2 days
+    /// Streak 2 -> 4 days
+    /// Streak 3 -> 7 days (1 week)
+    /// Streak 4 -> 14 days (2 weeks)
+    /// Streak 5+ -> 30 days (~1 month, checking long-term retention)
+    /// </summary>
+    public static int GetIntervalDays(int streak) => streak switch
+    {
+        0 => 1,
+        1 => 2,
+        2 => 4,
+        3 => 7,
+        4 => 14,
+        _ => 30,
+    };
+
+    /// <summary>Pick a card that is due for typing practice based on expanding intervals.</summary>
     [HttpGet("next")]
     public async Task<ActionResult<CardDto>> Next([FromQuery] string? category = null)
     {
-        var q = _db.VocabCards.Where(c => c.Status == CardStatus.Learning || c.Status == CardStatus.Review);
+        var today = StudyLogService.TodayUtc();
+        var q = _db.VocabCards.Where(c => c.Status == CardStatus.Learning || c.Status == CardStatus.Review || c.Status == CardStatus.Mastered);
         if (!string.IsNullOrWhiteSpace(category)) q = q.Where(c => c.Category == category);
-        var ids = await q.Select(c => c.Id).ToListAsync();
-        if (ids.Count == 0) return NotFound(new { error = "No learned cards yet. Review some SRS cards first." });
-        var card = await _db.VocabCards.FindAsync(ids[Random.Shared.Next(ids.Count)]);
-        if (card is null) return NotFound(new { error = "No learned cards yet. Review some SRS cards first." });
+
+        var allCards = await q.ToListAsync();
+        if (allCards.Count == 0) return NotFound(new { error = "Chưa có thẻ từ vựng nào trong danh sách học." });
+
+        // A card is due if it has never been typed, or its interval has passed
+        var dueCards = allCards.Where(c =>
+            c.LastTypingPassDate == null ||
+            c.LastTypingPassDate.Value.AddDays(GetIntervalDays(c.ConsecutiveTypingPasses)) <= today
+        ).ToList();
+
+        // If cards are due, pick one; otherwise pick from cards not practiced today
+        var pool = dueCards.Count > 0
+            ? dueCards
+            : allCards.Where(c => c.LastTypingPassDate != today).ToList();
+
+        if (pool.Count == 0) pool = allCards;
+
+        var card = pool[Random.Shared.Next(pool.Count)];
         return DtoMapper.ToDto(card);
     }
 
     /// <summary>
-    /// Grade typed input. Pass 5 consecutive times on different days => Mastered (retired).
-    /// Same-day repeats don't extend the streak; a fail resets it to 0.
+    /// Grade typed input with exponential spacing.
+    /// Passes >= 5 => Mastered. Reappears every 30 days to ensure lifelong memory.
     /// </summary>
     [HttpPost("{id}/submit")]
     public async Task<ActionResult<TypingResultDto>> Submit(int id, [FromBody] TypingSubmitDto dto)
@@ -219,21 +253,24 @@ public class TypingController : ControllerBase
         else
         {
             card.ConsecutiveTypingPasses = 0;
+            card.LastTypingPassDate = today;
         }
 
         bool mastered = false;
-        if (card.ConsecutiveTypingPasses >= RequiredStreak && card.Status != CardStatus.Mastered)
+        if (card.ConsecutiveTypingPasses >= RequiredStreak)
         {
             card.Status = CardStatus.Mastered;
-            card.NextReviewDate = DateTime.UtcNow.AddYears(10); // retired: never due again
             mastered = true;
         }
+
+        int intervalDays = GetIntervalDays(card.ConsecutiveTypingPasses);
+        card.NextReviewDate = DateTime.UtcNow.AddDays(intervalDays);
 
         await _db.SaveChangesAsync();
         await _logs.LogActivityAsync(cards: 1);
 
         return new TypingResultDto(passed, Math.Round(sim, 3), card.Term, card.MeaningVi,
-            card.ConsecutiveTypingPasses, RequiredStreak, mastered, counted);
+            card.ConsecutiveTypingPasses, RequiredStreak, mastered, counted, intervalDays);
     }
 }
 
@@ -281,9 +318,25 @@ public class DashboardController : ControllerBase
             .Select(c => new LeechDto(c.Id, c.Term, c.MeaningVi, c.MistakeCount, c.Category))
             .ToListAsync();
 
+        // GitHub-style contribution heatmap: past 52 weeks aligned to Sunday
+        var startDate = today.AddDays(-(int)today.DayOfWeek - 52 * 7);
+        var pastLogs = await _db.StudyLogs
+            .Where(x => x.StudyDate >= startDate && x.StudyDate <= today)
+            .ToDictionaryAsync(x => x.StudyDate, x => x.CardsReviewed + x.DrillsCompleted);
+
+        var heatmap = new List<HeatmapDayDto>();
+        int totalLastYear = 0;
+        for (var cur = startDate; cur <= today; cur = cur.AddDays(1))
+        {
+            pastLogs.TryGetValue(cur, out int count);
+            heatmap.Add(new HeatmapDayDto(cur.ToString("yyyy-MM-dd"), count));
+            totalLastYear += count;
+        }
+
         return new DashboardDto(streak, cardsDue, drillsDue, mastered, total,
             (todayLog?.CardsReviewed ?? 0) + (todayLog?.DrillsCompleted ?? 0),
-            target, todayLog?.AiCallsUsed ?? 0, forecast, leeches);
+            target, todayLog?.AiCallsUsed ?? 0, forecast, leeches,
+            heatmap, totalLastYear);
     }
 
     [HttpPost("log-time")]

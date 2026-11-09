@@ -73,6 +73,11 @@ export interface Leech {
   category: string;
 }
 
+export interface HeatmapDay {
+  date: string;
+  count: number;
+}
+
 export interface Dashboard {
   streak: number;
   cardsDue: number;
@@ -84,6 +89,8 @@ export interface Dashboard {
   aiCallsToday: number;
   forecast: ForecastDay[];
   leeches: Leech[];
+  heatmap: HeatmapDay[];
+  totalReviewedLastYear: number;
 }
 
 export interface AiSentenceResult {

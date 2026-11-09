@@ -27,7 +27,8 @@ public record TypingResultDto(
     int Streak,
     int RequiredStreak,
     bool Mastered,
-    bool CountedToday);
+    bool CountedToday,
+    int NextIntervalDays);
 
 public record DrillDto(
     int Id, string Category, string PromptVi, string TargetEn,
@@ -41,10 +42,13 @@ public record DrillResultDto(
     List<string> MatchedWords, List<string> MissedWords,
     string TargetEn, List<string> AlternativesEn, string GrammarNote);
 
+public record HeatmapDayDto(string Date, int Count);
+
 public record DashboardDto(
     int Streak, int CardsDue, int DrillsDue, int MasteredCount, int TotalCards,
     int TodayReviewed, int DailyTarget, int AiCallsToday,
-    List<ForecastDayDto> Forecast, List<LeechDto> Leeches);
+    List<ForecastDayDto> Forecast, List<LeechDto> Leeches,
+    List<HeatmapDayDto> Heatmap, int TotalReviewedLastYear);
 
 public record ForecastDayDto(string Date, int Count);
 public record LeechDto(int Id, string Term, string MeaningVi, int MistakeCount, string Category);
