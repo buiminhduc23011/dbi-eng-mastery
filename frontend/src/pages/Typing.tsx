@@ -229,7 +229,11 @@ export default function Typing({ onWordMastered }: Props) {
                   <div className="flex flex-wrap items-center gap-2.5 text-xs text-emerald-700 dark:text-emerald-300">
                     <span>Cấp độ: <b>{result.streak}/5</b></span>
                     <span>·</span>
-                    <span>Khoảng cách ôn tiếp theo: <b>sau {result.nextIntervalDays ?? (result.streak * 2)} ngày</b></span>
+                    {result.countedToday ? (
+                      <span>Khoảng cách ôn tiếp theo: <b>sau {result.nextIntervalDays ?? (result.streak * 2)} ngày</b></span>
+                    ) : (
+                      <span className="text-slate-500 dark:text-slate-400 italic">(Lượt luyện xoay vòng — không cộng dồn ngày)</span>
+                    )}
                   </div>
                 </div>
               ) : (

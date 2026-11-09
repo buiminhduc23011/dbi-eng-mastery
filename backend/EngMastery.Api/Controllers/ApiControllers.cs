@@ -194,7 +194,12 @@ public class TypingController : ControllerBase
         _ => 30,
     };
 
-    /// <summary>Pick a card that is due for typing practice based on expanding intervals.</summary>
+    /// <summary>
+    /// Pick a card for typing practice:
+    /// Priority 1: Cards currently due based on exponential intervals.
+    /// Priority 2: When all due cards are done, rotate cards that had mistakes (MistakeCount > 0) so user can re-practice.
+    /// Priority 3: If all correct, rotate random learned cards for unlimited practice without blocking.
+    /// </summary>
     [HttpGet("next")]
     public async Task<ActionResult<CardDto>> Next([FromQuery] string? category = null)
     {
@@ -205,26 +210,39 @@ public class TypingController : ControllerBase
         var allCards = await q.ToListAsync();
         if (allCards.Count == 0) return NotFound(new { error = "Chưa có thẻ từ vựng nào trong danh sách học." });
 
-        // A card is due if it has never been typed, or its interval has passed
+        // Priority 1: Due cards (never typed or interval elapsed)
         var dueCards = allCards.Where(c =>
             c.LastTypingPassDate == null ||
             c.LastTypingPassDate.Value.AddDays(GetIntervalDays(c.ConsecutiveTypingPasses)) <= today
         ).ToList();
 
-        // If cards are due, pick one; otherwise pick from cards not practiced today
-        var pool = dueCards.Count > 0
-            ? dueCards
-            : allCards.Where(c => c.LastTypingPassDate != today).ToList();
+        if (dueCards.Count > 0)
+        {
+            var card = dueCards[Random.Shared.Next(dueCards.Count)];
+            return DtoMapper.ToDto(card);
+        }
 
+        // Priority 2: Rotate words that had mistakes so user can practice difficult words
+        var mistakeCards = allCards.Where(c => c.MistakeCount > 0).OrderByDescending(c => c.MistakeCount).ToList();
+        if (mistakeCards.Count > 0)
+        {
+            var topMistakes = mistakeCards.Take(15).ToList();
+            var card = topMistakes[Random.Shared.Next(topMistakes.Count)];
+            return DtoMapper.ToDto(card);
+        }
+
+        // Priority 3: All correct -> rotate through all cards for free practice
+        var pool = allCards.Where(c => c.LastTypingPassDate != today).ToList();
         if (pool.Count == 0) pool = allCards;
 
-        var card = pool[Random.Shared.Next(pool.Count)];
-        return DtoMapper.ToDto(card);
+        var randomCard = pool[Random.Shared.Next(pool.Count)];
+        return DtoMapper.ToDto(randomCard);
     }
 
     /// <summary>
     /// Grade typed input with exponential spacing.
-    /// Passes >= 5 => Mastered. Reappears every 30 days to ensure lifelong memory.
+    /// Only genuine due cards on a new day increment the streak (+1).
+    /// Rotation / extra practice passes do NOT falsely increment the streak count.
     /// </summary>
     [HttpPost("{id}/submit")]
     public async Task<ActionResult<TypingResultDto>> Submit(int id, [FromBody] TypingSubmitDto dto)
@@ -240,10 +258,14 @@ public class TypingController : ControllerBase
         bool passed = got == want || sim >= 0.9;
 
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        bool isDue = card.LastTypingPassDate == null ||
+                     card.LastTypingPassDate.Value.AddDays(GetIntervalDays(card.ConsecutiveTypingPasses)) <= today;
+
         bool counted = false;
         if (passed)
         {
-            if (card.LastTypingPassDate != today)
+            // Only advance streak if this card was actually DUE and hasn't passed today yet
+            if (isDue && card.LastTypingPassDate != today)
             {
                 card.ConsecutiveTypingPasses++;
                 card.LastTypingPassDate = today;
@@ -252,6 +274,7 @@ public class TypingController : ControllerBase
         }
         else
         {
+            card.MistakeCount++;
             card.ConsecutiveTypingPasses = 0;
             card.LastTypingPassDate = today;
         }
