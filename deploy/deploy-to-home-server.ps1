@@ -40,6 +40,7 @@ echo '$Password' | sudo -S rm -rf $RemoteDir/server
 echo '$Password' | sudo -S mv /tmp/engmastery-update/server $RemoteDir/server
 echo '$Password' | sudo -S cp -f /tmp/engmastery-data-backup.db $RemoteDir/server/engmastery.db || true
 echo '$Password' | sudo -S rm -f /tmp/engmastery-data-backup.db
+echo '$Password' | sudo -S chmod -R u+rwX $RemoteDir
 echo '$Password' | sudo -S chmod +x $RemoteDir/server/EngMastery.Api
 echo '$Password' | sudo -S chown -R ${RemoteUser}:${RemoteUser} $RemoteDir
 echo '$Password' | sudo -S systemctl start engmastery
