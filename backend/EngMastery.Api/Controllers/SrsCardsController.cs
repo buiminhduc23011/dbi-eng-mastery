@@ -74,7 +74,7 @@ public class CardsController : ControllerBase
         if (!string.IsNullOrWhiteSpace(category)) query = query.Where(c => c.Category == category);
         if (Enum.TryParse<CardStatus>(status, true, out var st)) query = query.Where(c => c.Status == st);
         var cards = await query.OrderByDescending(c => c.MistakeCount).ThenBy(c => c.Term)
-            .Take(Math.Clamp(take, 1, 1000)).ToListAsync();
+            .Take(Math.Clamp(take, 1, 5000)).ToListAsync();
         return cards.Select(DtoMapper.ToDto).ToList();
     }
 

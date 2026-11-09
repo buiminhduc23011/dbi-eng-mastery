@@ -18,7 +18,7 @@ export default function Cards({ onCardsChanged }: Props) {
   const load = async () => {
     setLoading(true);
     try {
-      const params: Record<string, string> = { take: '500' };
+      const params: Record<string, string> = { take: '2000' };
       if (query) params.q = query;
       if (category) params.category = category;
       const r = await api.get<VocabCard[]>('/cards', { params });

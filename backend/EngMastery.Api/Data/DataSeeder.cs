@@ -5,7 +5,7 @@ using System.Text.Json;
 
 namespace EngMastery.Api.Data;
 
-public static class DataSeeder
+public static partial class DataSeeder
 {
     private const string SW = "Software & Dev";
     private const string IA = "Industrial & Automation";
@@ -979,7 +979,11 @@ public static class DataSeeder
         // Add-missing (by Term): safe to re-run after adding new seed batches.
         var existingTerms = (await db.VocabCards.Select(c => c.Term).ToListAsync())
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var allCards = GetCards().Concat(GetExtraCards()).Concat(GetWorkCards()).ToList();
+        var allCards = GetCards()
+            .Concat(GetExtraCards())
+            .Concat(GetWorkCards())
+            .Concat(GetCommunicationCards())
+            .ToList();
         var missingCards = allCards.Where(c => !existingTerms.Contains(c.Term)).ToList();
         if (missingCards.Count > 0)
         {
