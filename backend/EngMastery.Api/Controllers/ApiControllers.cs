@@ -199,16 +199,25 @@ public class TypingController : ControllerBase
     /// Priority 1: Cards currently due based on exponential intervals.
     /// Priority 2: When all due cards are done, rotate cards that had mistakes (MistakeCount > 0) so user can re-practice.
     /// Priority 3: If all correct, rotate random learned cards for unlimited practice without blocking.
+    /// mode=mistakes: only cards typed wrong and never typed correctly in a row
+    /// (MistakeCount &gt; 0 and ConsecutiveTypingPasses == 0) for focused review.
     /// </summary>
     [HttpGet("next")]
-    public async Task<ActionResult<CardDto>> Next([FromQuery] string? category = null)
+    public async Task<ActionResult<CardDto>> Next([FromQuery] string? category = null, [FromQuery] string? mode = null)
     {
         var today = StudyLogService.TodayUtc();
         var q = _db.VocabCards.Where(c => c.Status == CardStatus.Learning || c.Status == CardStatus.Review || c.Status == CardStatus.Mastered);
         if (!string.IsNullOrWhiteSpace(category)) q = q.Where(c => c.Category == category);
+        if (string.Equals(mode, "mistakes", StringComparison.OrdinalIgnoreCase))
+            q = q.Where(c => c.MistakeCount > 0 && c.ConsecutiveTypingPasses == 0);
 
         var allCards = await q.ToListAsync();
-        if (allCards.Count == 0) return NotFound(new { error = "Chưa có thẻ từ vựng nào trong danh sách học." });
+        if (allCards.Count == 0)
+        {
+            if (string.Equals(mode, "mistakes", StringComparison.OrdinalIgnoreCase))
+                return NotFound(new { error = "Chưa có từ gõ sai nào cần ôn (từ đã gõ sai mà chuỗi đúng đang = 0). Hãy luyện gõ thường, gõ sai vài từ rồi quay lại đây ôn nhé!" });
+            return NotFound(new { error = "Chưa có thẻ từ vựng nào trong danh sách học." });
+        }
 
         // Priority 1: Due cards (never typed or interval elapsed)
         var dueCards = allCards.Where(c =>
@@ -237,6 +246,17 @@ public class TypingController : ControllerBase
 
         var randomCard = pool[Random.Shared.Next(pool.Count)];
         return DtoMapper.ToDto(randomCard);
+    }
+
+    /// <summary>Count of mistake-only cards (typed wrong, current streak = 0).</summary>
+    [HttpGet("mistakes/count")]
+    public async Task<ActionResult<object>> MistakesCount([FromQuery] string? category = null)
+    {
+        var q = _db.VocabCards.Where(c =>
+            (c.Status == CardStatus.Learning || c.Status == CardStatus.Review || c.Status == CardStatus.Mastered)
+            && c.MistakeCount > 0 && c.ConsecutiveTypingPasses == 0);
+        if (!string.IsNullOrWhiteSpace(category)) q = q.Where(c => c.Category == category);
+        return Ok(new { count = await q.CountAsync() });
     }
 
     /// <summary>

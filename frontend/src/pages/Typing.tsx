@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, type VocabCard } from '../lib/api';
 import { speak } from '../lib/speech';
 import { Volume2, ArrowRight, Keyboard, Trophy, CheckCircle2, XCircle } from 'lucide-react';
@@ -19,41 +19,64 @@ interface Props {
   onWordMastered?: () => void;
 }
 
+type TypingMode = 'all' | 'mistakes';
+
 export default function Typing({ onWordMastered }: Props) {
   const [category, setCategory] = useState('');
+  const [mode, setMode] = useState<TypingMode>('all');
   const [categories, setCategories] = useState<string[]>([]);
   const [card, setCard] = useState<VocabCard | null>(null);
   const [input, setInput] = useState('');
   const [result, setResult] = useState<TypingResult | null>(null);
   const [empty, setEmpty] = useState('');
   const [loading, setLoading] = useState(false);
+  const [mistakesCount, setMistakesCount] = useState(0);
   const nextBtnRef = useRef<HTMLButtonElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  // Auto focus next button on result
+  // Auto focus next button on result, input otherwise
   useEffect(() => {
     if (result) nextBtnRef.current?.focus();
+    else inputRef.current?.focus();
   }, [result]);
 
-  const loadNext = async (cat: string) => {
+  const loadMistakesCount = useCallback(async (cat: string) => {
+    try {
+      const params = cat ? { params: { category: cat } } : undefined;
+      const r = await api.get<{ count: number }>('/typing/mistakes/count', params);
+      setMistakesCount(r.data.count);
+    } catch {
+      setMistakesCount(0);
+    }
+  }, []);
+
+  const loadNext = useCallback(async (cat: string, m: TypingMode) => {
     setLoading(true);
     setEmpty('');
     try {
-      const params = cat ? { params: { category: cat } } : undefined;
-      const r = await api.get<VocabCard>('/typing/next', params);
+      const params: Record<string, string> = {};
+      if (cat) params.category = cat;
+      if (m === 'mistakes') params.mode = 'mistakes';
+      const r = await api.get<VocabCard>('/typing/next', { params });
       setCard(r.data);
       setInput('');
       setResult(null);
     } catch {
       setCard(null);
-      setEmpty('Chưa có từ nào ở trạng thái Learning/Review trong danh sách. Hãy ôn SRS Review trước để mở khóa chế độ gõ từ!');
+      setEmpty(
+        m === 'mistakes'
+          ? 'Chưa có từ gõ sai nào cần ôn (từ đã gõ sai mà chuỗi đúng đang = 0). Hãy luyện gõ thường, gõ sai vài từ rồi quay lại đây ôn nhé!'
+          : 'Chưa có từ nào ở trạng thái Learning/Review trong danh sách. Hãy ôn SRS Review trước để mở khóa chế độ gõ từ!',
+      );
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     api.get<string[]>('/cards/categories').then((r) => setCategories(r.data)).catch(() => undefined);
-    loadNext('');
+    void loadNext('', 'all');
+    void loadMistakesCount('');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -65,10 +88,33 @@ export default function Typing({ onWordMastered }: Props) {
       if (r.data.mastered) {
         onWordMastered?.();
       }
+      void loadMistakesCount(category);
     } catch {
       // Error handling
     }
   };
+
+  // Keyboard shortcuts: R = nghe lại đáp án, Enter = từ tiếp theo (chỉ khi đã có kết quả).
+  // Khi đang gõ (chưa có result) thì không chặn phím R để vẫn gõ chữ "r" bình thường.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!result) return;
+      const target = e.target as HTMLElement | null;
+      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return;
+
+      if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        speak(result.correctTerm);
+      } else if (e.key === 'Enter') {
+        // Nếu nút "Từ tiếp theo" đang focus thì để click mặc định xử lý, tránh gọi 2 lần.
+        if (document.activeElement === nextBtnRef.current) return;
+        e.preventDefault();
+        void loadNext(category, mode);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [result, category, mode, loadNext]);
 
   const streakDots = (streak: number, required = 5) => (
     <div className="flex items-center gap-1.5">
@@ -98,28 +144,56 @@ export default function Typing({ onWordMastered }: Props) {
           <Keyboard size={20} className="text-indigo-600 dark:text-indigo-400" />
           Luyện gõ từ vựng
         </h2>
+        {mistakesCount > 0 && (
+          <span className="rounded-full bg-rose-100 px-2.5 py-1 text-[11px] font-bold text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">
+            {mistakesCount} từ gõ sai cần ôn
+          </span>
+        )}
       </div>
 
       {/* Filter and Next */}
-      <div className="flex items-center justify-between gap-2">
-        <select
-          value={category}
-          onChange={(e) => {
-            setCategory(e.target.value);
-            void loadNext(e.target.value);
-          }}
-          className="rounded-2xl border border-slate-200/80 bg-white px-3.5 py-2 text-xs font-semibold shadow-sm dark:border-slate-800 dark:bg-[#111827]"
-        >
-          <option value="">Tất cả chủ đề (Ngẫu nhiên)</option>
-          {categories.map((c) => (
-            <option key={c} value={c}>
-              {c}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={category}
+            onChange={(e) => {
+              setCategory(e.target.value);
+              void loadMistakesCount(e.target.value);
+              void loadNext(e.target.value, mode);
+            }}
+            className="rounded-2xl border border-slate-200/80 bg-white px-3.5 py-2 text-xs font-semibold shadow-sm dark:border-slate-800 dark:bg-[#111827]"
+          >
+            <option value="">Tất cả chủ đề (Ngẫu nhiên)</option>
+            {categories.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={mode}
+            onChange={(e) => {
+              const m = e.target.value as TypingMode;
+              setMode(m);
+              void loadNext(category, m);
+            }}
+            title="Chế độ ôn"
+            className={`rounded-2xl border px-3.5 py-2 text-xs font-bold shadow-sm ${
+              mode === 'mistakes'
+                ? 'border-rose-300 bg-rose-50 text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-300'
+                : 'border-slate-200/80 bg-white text-slate-700 dark:border-slate-800 dark:bg-[#111827] dark:text-slate-300'
+            }`}
+          >
+            <option value="all">Ngẫu nhiên</option>
+            <option value="mistakes">
+              Ôn từ gõ sai {mistakesCount > 0 ? `(${mistakesCount})` : ''} — chuỗi đúng = 0
             </option>
-          ))}
-        </select>
+          </select>
+        </div>
 
         <button
-          onClick={() => loadNext(category)}
+          onClick={() => loadNext(category, mode)}
           className="rounded-2xl border border-slate-200/80 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-800 dark:bg-[#111827] dark:text-slate-300"
         >
           Từ khác →
@@ -142,6 +216,17 @@ export default function Typing({ onWordMastered }: Props) {
           </div>
           <h3 className="mt-3 font-bold text-amber-900 dark:text-amber-200">Chưa có từ nào sẵn sàng gõ</h3>
           <p className="mt-1 text-xs sm:text-sm text-amber-800/90 dark:text-amber-300/90">{empty}</p>
+          {mode === 'mistakes' && (
+            <button
+              onClick={() => {
+                setMode('all');
+                void loadNext(category, 'all');
+              }}
+              className="mt-4 rounded-2xl bg-amber-600 px-5 py-2.5 text-xs font-bold text-white shadow-md hover:bg-amber-700"
+            >
+              Quay lại luyện ngẫu nhiên
+            </button>
+          )}
         </div>
       )}
 
@@ -182,6 +267,7 @@ export default function Typing({ onWordMastered }: Props) {
           {!result ? (
             <div className="mt-6 space-y-3">
               <input
+                ref={inputRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => {
@@ -243,7 +329,8 @@ export default function Typing({ onWordMastered }: Props) {
                     <span>Chưa đúng — Đáp án: <span className="font-mono underline">{result.correctTerm}</span></span>
                   </div>
                   <div className="text-xs text-rose-700 dark:text-rose-300">
-                    Bạn gõ: &ldquo;{input}&rdquo; · Chuỗi bị đặt lại về 0, sẽ hỏi lại vào ngày mai để củng cố.
+                    Bạn gõ: &ldquo;{input}&rdquo; · Đã gõ sai từ này {card.mistakeCount + 1} lần
+                    · Chuỗi bị đặt lại về 0, sẽ hỏi lại vào ngày mai để củng cố.
                   </div>
                 </div>
               )}
@@ -255,16 +342,19 @@ export default function Typing({ onWordMastered }: Props) {
                   className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-200"
                 >
                   <Volume2 size={15} />
-                  <span>Nghe</span>
+                  <span>Nghe (R)</span>
                 </button>
                 <button
                   ref={nextBtnRef}
-                  onClick={() => loadNext(category)}
+                  onClick={() => loadNext(category, mode)}
                   className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-indigo-600 py-2.5 text-xs font-bold text-white shadow-md shadow-indigo-600/25 transition hover:bg-indigo-700 active:scale-95"
                 >
-                  <span>Từ tiếp theo</span>
+                  <span>Từ tiếp theo (Enter)</span>
                   <ArrowRight size={15} />
                 </button>
+              </div>
+              <div className="mt-2 text-center text-[11px] text-slate-400">
+                Phím tắt: R để nghe · Enter để qua từ tiếp
               </div>
             </div>
           )}
