@@ -133,11 +133,19 @@ public class CardsController : ControllerBase
             foreach (var qt in qTokens)
             {
                 double m = 0;
-                foreach (var tt in targetTokens)
+                if (qt.Length < 3)
                 {
-                    if (tt.Contains(qt) || qt.Contains(tt)) { m = 1; break; }
-                    double s = OfflineEvaluator.Similarity(qt, tt);
-                    if (s > m) m = s;
+                    // Tiny tokens (a, I, ...): exact match only, otherwise they match everything.
+                    if (targetTokens.Contains(qt)) m = 1;
+                }
+                else
+                {
+                    foreach (var tt in targetTokens)
+                    {
+                        if (tt.Length >= 3 && (tt.Contains(qt) || qt.Contains(tt))) { m = 1; break; }
+                        double s = OfflineEvaluator.Similarity(qt, tt);
+                        if (s > m) m = s;
+                    }
                 }
                 sum += m;
             }
