@@ -57,6 +57,10 @@ export default function App() {
   const [dark, setDark] = useState(() => localStorage.getItem('em-theme') !== 'light');
   const [sheetOpen, setSheetOpen] = useState(false);
   const [dashData, setDashData] = useState<Dashboard | null>(null);
+  // Which SRS deck to study: due cards or mistake-only leeches (from Dashboard click).
+  const [reviewDeck, setReviewDeck] = useState<'due' | 'leeches'>('due');
+  const [reviewStartId, setReviewStartId] = useState<number | null>(null);
+  const [reviewKey, setReviewKey] = useState(0);
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark);
@@ -77,7 +81,23 @@ export default function App() {
   }, [refreshDashboard]);
 
   const go = (id: TabId) => {
+    // Normal entry into review always starts from the due deck (fresh session).
+    if (id === 'review') {
+      setReviewDeck('due');
+      setReviewStartId(null);
+      setReviewKey((k) => k + 1);
+    }
     setTab(id);
+    setSheetOpen(false);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Jump straight into SRS review with only the mistake-prone words, starting at the tapped card.
+  const goReviewLeeches = (startId?: number) => {
+    setReviewDeck('leeches');
+    setReviewStartId(startId ?? null);
+    setReviewKey((k) => k + 1);
+    setTab('review');
     setSheetOpen(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -204,8 +224,8 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="mx-auto w-full max-w-6xl flex-1 px-3 py-4 sm:px-4 sm:py-6 pb-24 md:pb-8">
-        {tab === 'dashboard' && <DashboardPage go={go} onRefresh={refreshDashboard} />}
-        {tab === 'review' && <Review onSessionComplete={refreshDashboard} />}
+        {tab === 'dashboard' && <DashboardPage go={go} onRefresh={refreshDashboard} onStudyLeech={goReviewLeeches} />}
+        {tab === 'review' && <Review key={reviewKey} deck={reviewDeck} startId={reviewStartId} reloadKey={reviewKey} onSessionComplete={refreshDashboard} />}
         {tab === 'typing' && <Typing onWordMastered={refreshDashboard} />}
         {tab === 'drills' && <Drills onDrillComplete={refreshDashboard} />}
         {tab === 'shadowing' && <Shadowing />}

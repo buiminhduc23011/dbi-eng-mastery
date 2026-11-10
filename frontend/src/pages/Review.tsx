@@ -41,10 +41,14 @@ const RATING_CONFIG = [
 
 interface Props {
   onSessionComplete?: () => void;
+  deck?: 'due' | 'leeches';
+  startId?: number | null;
+  reloadKey?: number;
 }
 
-export default function Review({ onSessionComplete }: Props) {
+export default function Review({ onSessionComplete, deck = 'due', startId = null, reloadKey = 0 }: Props) {
   const [mode, setMode] = useState<Mode>('flip');
+  const [queueFilter, setQueueFilter] = useState<'due' | 'leeches'>(deck);
   const [category, setCategory] = useState('');
   const [categories, setCategories] = useState<string[]>([]);
   const [queue, setQueue] = useState<VocabCard[]>([]);
@@ -59,18 +63,25 @@ export default function Review({ onSessionComplete }: Props) {
 
   const card = queue[index];
 
-  const load = useCallback(async (cat: string) => {
+  const load = useCallback(async (cat: string, filter: 'due' | 'leeches', focusId?: number | null) => {
     setLoading(true);
     setRateError('');
     try {
+      const endpoint = filter === 'leeches' ? '/srs/leeches' : '/srs/due';
       const params = cat ? { params: { category: cat, take: 50 } } : { params: { take: 50 } };
-      const r = await api.get<VocabCard[]>('/srs/due', params);
-      setQueue(r.data);
+      const r = await api.get<VocabCard[]>(endpoint, params);
+      let list = r.data;
+      // Start at the clicked word so review begins exactly where the user tapped.
+      if (focusId) {
+        const i = list.findIndex((c) => c.id === focusId);
+        if (i > 0) list = [...list.slice(i), ...list.slice(0, i)];
+      }
+      setQueue(list);
       setIndex(0);
       setFlipped(false);
       setAnswer('');
       setClozeChecked(false);
-      setDone(r.data.length === 0);
+      setDone(list.length === 0);
     } finally {
       setLoading(false);
     }
@@ -78,8 +89,15 @@ export default function Review({ onSessionComplete }: Props) {
 
   useEffect(() => {
     api.get<string[]>('/cards/categories').then((r) => setCategories(r.data)).catch(() => undefined);
-    load('');
-  }, [load]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Reload whenever the parent requests a deck (e.g. clicking a leech on Dashboard).
+  useEffect(() => {
+    setQueueFilter(deck);
+    void load(category, deck, startId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deck, startId, reloadKey]);
 
   const playAudio = (text: string) => {
     setIsSpeaking(true);
@@ -212,12 +230,40 @@ export default function Review({ onSessionComplete }: Props) {
 
         {/* Category & Reload */}
         <div className="flex items-center gap-1.5 ml-auto">
+          <div className="flex rounded-xl bg-slate-200/80 p-0.5 dark:bg-slate-800/80 shadow-inner">
+            <button
+              onClick={() => {
+                setQueueFilter('due');
+                void load(category, 'due');
+              }}
+              className={`rounded-lg px-3 py-1.5 text-[11px] font-bold transition-all ${
+                queueFilter === 'due'
+                  ? 'bg-white text-indigo-600 shadow-sm dark:bg-[#111827] dark:text-indigo-400'
+                  : 'text-slate-600 dark:text-slate-400'
+              }`}
+            >
+              Đến hạn
+            </button>
+            <button
+              onClick={() => {
+                setQueueFilter('leeches');
+                void load(category, 'leeches');
+              }}
+              className={`rounded-lg px-3 py-1.5 text-[11px] font-bold transition-all ${
+                queueFilter === 'leeches'
+                  ? 'bg-white text-rose-600 shadow-sm dark:bg-[#111827] dark:text-rose-400'
+                  : 'text-slate-600 dark:text-slate-400'
+              }`}
+            >
+              Từ hay sai
+            </button>
+          </div>
           <div className="relative">
             <select
               value={category}
               onChange={(e) => {
                 setCategory(e.target.value);
-                void load(e.target.value);
+                void load(e.target.value, queueFilter);
               }}
               className="appearance-none rounded-xl border border-slate-200/80 bg-white py-1.5 pl-3 pr-8 text-xs font-semibold shadow-sm dark:border-slate-800 dark:bg-[#111827]"
             >
@@ -232,9 +278,9 @@ export default function Review({ onSessionComplete }: Props) {
           </div>
 
           <button
-            onClick={() => load(category)}
+            onClick={() => load(category, queueFilter)}
             className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200/80 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50 dark:border-slate-800 dark:bg-[#111827] dark:text-slate-300"
-            title="Tải lại danh sách thẻ đến hạn"
+            title="Tải lại danh sách thẻ"
           >
             <RotateCcw size={14} />
           </button>
@@ -259,14 +305,16 @@ export default function Review({ onSessionComplete }: Props) {
             Hoàn thành xuất sắc phiên ôn tập!
           </h2>
           <p className="mx-auto mt-1.5 max-w-md text-xs sm:text-sm text-emerald-700/90 dark:text-emerald-300/90">
-            Bạn đã ôn tập xong toàn bộ thẻ đến hạn hôm nay. Hãy quay lại vào ngày mai nhé!
+            {queueFilter === 'leeches'
+              ? 'Bạn đã ôn xong toàn bộ từ hay sai. Bấm nút dưới để ôn lại một vòng nữa cho chắc!'
+              : 'Bạn đã ôn tập xong toàn bộ thẻ đến hạn hôm nay. Hãy quay lại vào ngày mai nhé!'}
           </p>
           <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
             <button
-              onClick={() => load(category)}
+              onClick={() => load(category, queueFilter)}
               className="flex items-center gap-2 rounded-2xl bg-emerald-600 px-5 py-2.5 text-xs font-bold text-white shadow-md shadow-emerald-600/25 transition hover:bg-emerald-700 active:scale-95"
             >
-              <RotateCcw size={14} /> Kiểm tra thẻ mới
+              <RotateCcw size={14} /> {queueFilter === 'leeches' ? 'Ôn lại vòng nữa' : 'Kiểm tra thẻ mới'}
             </button>
           </div>
         </div>

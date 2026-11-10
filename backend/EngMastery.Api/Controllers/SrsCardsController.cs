@@ -35,6 +35,20 @@ public class SrsController : ControllerBase
         return cards.Select(DtoMapper.ToDto).ToList();
     }
 
+    /// <summary>Cards frequently answered wrong (MistakeCount &gt; 0), hardest first — focused leech review.</summary>
+    [HttpGet("leeches")]
+    public async Task<ActionResult<List<CardDto>>> Leeches([FromQuery] int take = 50, [FromQuery] string? category = null)
+    {
+        var q = _db.VocabCards.Where(c => c.MistakeCount > 0);
+        if (!string.IsNullOrWhiteSpace(category)) q = q.Where(c => c.Category == category);
+        var cards = await q
+            .OrderByDescending(c => c.MistakeCount)
+            .ThenBy(c => c.NextReviewDate)
+            .Take(Math.Clamp(take, 1, 200))
+            .ToListAsync();
+        return cards.Select(DtoMapper.ToDto).ToList();
+    }
+
     /// <summary>Submit a review with quality q: 1=Again, 2=Hard, 3=Good, 4=Easy.</summary>
     [HttpPost("{id}/review")]
     public async Task<ActionResult<CardDto>> Review(int id, [FromBody] ReviewDto dto)
