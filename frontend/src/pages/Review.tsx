@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, type VocabCard } from '../lib/api';
 import { speak } from '../lib/speech';
 import {
@@ -62,6 +62,24 @@ export default function Review({ onSessionComplete, deck = 'due', startId = null
   const [isSpeaking, setIsSpeaking] = useState(false);
 
   const card = queue[index];
+
+  const answerRef = useRef<HTMLInputElement>(null);
+
+  // After checking an answer, drop focus out of the textbox so 1-4 / Enter / R
+  // go to the global shortcuts instead of typing into the field.
+  const doCheck = () => {
+    if (!answer.trim() || clozeChecked) return;
+    setClozeChecked(true);
+    answerRef.current?.blur();
+    (document.activeElement as HTMLElement | null)?.blur?.();
+  };
+
+  // Focus the answer box whenever a fresh cloze card appears.
+  useEffect(() => {
+    if (mode === 'cloze' && !clozeChecked && !loading && !done && card) {
+      answerRef.current?.focus();
+    }
+  }, [mode, clozeChecked, loading, done, card, index, queue]);
 
   const load = useCallback(async (cat: string, filter: 'due' | 'leeches', focusId?: number | null) => {
     setLoading(true);
@@ -143,6 +161,9 @@ export default function Review({ onSessionComplete, deck = 'due', startId = null
     [mode],
   );
 
+  const clozeAcc = card ? accuracy(answer, card.term) : 0;
+  const suggested = clozeAcc < 0.6 ? 1 : clozeAcc < 0.8 ? 2 : clozeAcc < 0.95 ? 3 : 4;
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
@@ -154,6 +175,8 @@ export default function Review({ onSessionComplete, deck = 'due', startId = null
         if (mode === 'flip') {
           if (!flipped) setFlipped(true);
           else void rate(3); // Enter default Good
+        } else if (mode === 'cloze' && clozeChecked) {
+          void rate(suggested); // Enter applies the suggested rating
         }
       } else if (e.key >= '1' && e.key <= '4') {
         void rate(Number(e.key) as 1 | 2 | 3 | 4);
@@ -163,10 +186,7 @@ export default function Review({ onSessionComplete, deck = 'due', startId = null
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [rate, card, mode, flipped, speakFor]);
-
-  const clozeAcc = card ? accuracy(answer, card.term) : 0;
-  const suggested = clozeAcc < 0.6 ? 1 : clozeAcc < 0.8 ? 2 : clozeAcc < 0.95 ? 3 : 4;
+  }, [rate, card, mode, flipped, clozeChecked, suggested, speakFor]);
 
   const highlightedCloze = (c: VocabCard) => {
     const parts = c.clozeSentence.split(/(_+)/);
@@ -472,10 +492,11 @@ export default function Review({ onSessionComplete, deck = 'due', startId = null
 
               <div className="mt-4 space-y-2">
                 <input
+                  ref={answerRef}
                   value={answer}
                   onChange={(e) => setAnswer(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !clozeChecked && answer.trim()) setClozeChecked(true);
+                    if (e.key === 'Enter' && !clozeChecked && answer.trim()) doCheck();
                   }}
                   placeholder="Gõ từ còn thiếu vào đây…"
                   className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-base shadow-sm focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900"
@@ -483,7 +504,7 @@ export default function Review({ onSessionComplete, deck = 'due', startId = null
 
                 {!clozeChecked ? (
                   <button
-                    onClick={() => setClozeChecked(true)}
+                    onClick={doCheck}
                     disabled={!answer.trim()}
                     className="w-full rounded-2xl bg-indigo-600 py-3 text-sm font-bold text-white shadow-md shadow-indigo-600/25 transition hover:bg-indigo-700 disabled:opacity-40"
                   >
