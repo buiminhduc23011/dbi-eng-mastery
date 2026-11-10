@@ -66,7 +66,7 @@ export default function Typing({ onWordMastered }: Props) {
       setEmpty(
         m === 'mistakes'
           ? 'Chưa có từ gõ sai nào cần ôn (từ đã gõ sai mà chuỗi đúng đang = 0). Hãy luyện gõ thường, gõ sai vài từ rồi quay lại đây ôn nhé!'
-          : 'Chưa có từ nào ở trạng thái Learning/Review trong danh sách. Hãy ôn SRS Review trước để mở khóa chế độ gõ từ!',
+          : 'Chưa có từ nào ở trạng thái Learning/Review trong danh sách. Hãy vào Ôn tập trước để mở khóa chế độ gõ từ!',
       );
     } finally {
       setLoading(false);

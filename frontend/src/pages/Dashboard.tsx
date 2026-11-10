@@ -159,7 +159,7 @@ export default function DashboardPage({ go, onRefresh, onStudyLeech }: Props) {
             </h1>
 
             <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
-              Hệ thống SRS đã tối ưu lịch ôn theo đường cong quên lãng Ebbinghaus. Hoàn thành phiên ôn tập giúp đưa từ vựng vào vùng trí nhớ dài hạn.
+              Lịch ôn được tối ưu theo đường cong quên lãng Ebbinghaus. Hoàn thành phiên ôn tập giúp đưa từ vựng vào vùng trí nhớ dài hạn.
             </p>
 
             {/* Daily Goal Mini Progress */}
@@ -254,7 +254,7 @@ export default function DashboardPage({ go, onRefresh, onStudyLeech }: Props) {
                 </div>
                 <div>
                   <h2 className="text-sm font-bold text-slate-900 dark:text-white">Lịch ôn tập 7 ngày tới</h2>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400">Dự báo tải ôn tập thẻ SRS theo thuật toán SM-2</p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">Dự báo lượng thẻ cần ôn trong 7 ngày tới</p>
                 </div>
               </div>
               <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
@@ -458,9 +458,9 @@ export default function DashboardPage({ go, onRefresh, onStudyLeech }: Props) {
               <ArrowRight size={15} className="text-slate-400 transition-transform group-hover:translate-x-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-400" />
             </div>
             <div className="mt-3">
-              <div className="font-bold text-sm text-slate-900 dark:text-white">Dịch AI & Tạo thẻ SRS</div>
+              <div className="font-bold text-sm text-slate-900 dark:text-white">Dịch AI & Tạo thẻ học</div>
               <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                Dịch văn phong Business / Casual và lưu cụm từ vựng cần nhớ vào thẻ SRS chỉ với 1 chạm.
+                Dịch văn phong Business / Casual và lưu cụm từ vựng cần nhớ vào kho thẻ chỉ với 1 chạm.
               </p>
             </div>
           </div>

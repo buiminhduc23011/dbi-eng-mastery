@@ -46,7 +46,7 @@ export default function Translator({ onCardSaved }: Props) {
         category: 'Daily & Casual',
       });
       setSavedSet((prev) => new Set(prev).add(idx));
-      setSavedMsg(`Đã lưu "${term}" vào bộ thẻ SRS! ✅`);
+      setSavedMsg(`Đã lưu "${term}" vào kho thẻ! ✅`);
       onCardSaved?.();
       setTimeout(() => setSavedMsg(''), 3000);
     } catch {
@@ -181,7 +181,7 @@ export default function Translator({ onCardSaved }: Props) {
                         }`}
                       >
                         {isSaved ? <Check size={14} /> : <Plus size={14} />}
-                        <span>{isSaved ? 'Đã lưu' : isSaving ? '…' : '+ Thẻ SRS'}</span>
+                        <span>{isSaved ? 'Đã lưu' : isSaving ? '…' : '+ Tạo thẻ'}</span>
                       </button>
                     </div>
                   );

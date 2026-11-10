@@ -39,14 +39,14 @@ interface TabItem {
 
 const PRIMARY_TABS: TabItem[] = [
   { id: 'dashboard', label: 'Tổng quan', shortLabel: 'Tổng quan', icon: LayoutDashboard },
-  { id: 'review', label: 'Ôn tập SRS', shortLabel: 'Ôn tập', icon: Layers, badgeKey: 'cardsDue' },
+  { id: 'review', label: 'Ôn tập', shortLabel: 'Ôn tập', icon: Layers, badgeKey: 'cardsDue' },
   { id: 'drills', label: 'Luyện câu', shortLabel: 'Luyện câu', icon: PenLine, badgeKey: 'drillsDue' },
   { id: 'typing', label: 'Gõ từ', shortLabel: 'Gõ từ', icon: Keyboard },
 ];
 
 const SECONDARY_TABS: TabItem[] = [
   { id: 'shadowing', label: 'Phát âm', shortLabel: 'Phát âm', icon: Mic, description: 'Luyện nghe 1.0x / 0.8x & so khớp giọng nói' },
-  { id: 'translator', label: 'Dịch AI', shortLabel: 'Dịch AI', icon: Languages, description: 'Dịch công sở/đời sống & lưu nhanh vào thẻ SRS' },
+  { id: 'translator', label: 'Dịch AI', shortLabel: 'Dịch AI', icon: Languages, description: 'Dịch công sở/đời sống & lưu nhanh vào kho thẻ' },
   { id: 'cards', label: 'Kho thẻ', shortLabel: 'Kho thẻ', icon: Library, description: 'Tìm kiếm, sửa, xoá và xuất/nhập dữ liệu' },
 ];
 
@@ -57,7 +57,7 @@ export default function App() {
   const [dark, setDark] = useState(() => localStorage.getItem('em-theme') !== 'light');
   const [sheetOpen, setSheetOpen] = useState(false);
   const [dashData, setDashData] = useState<Dashboard | null>(null);
-  // Which SRS deck to study: due cards or mistake-only leeches (from Dashboard click).
+  // Which review deck to study: due cards or mistake-only leeches (from Dashboard click).
   const [reviewDeck, setReviewDeck] = useState<'due' | 'leeches'>('due');
   const [reviewStartId, setReviewStartId] = useState<number | null>(null);
   const [reviewKey, setReviewKey] = useState(0);
@@ -92,7 +92,7 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Jump straight into SRS review with only the mistake-prone words, starting at the tapped card.
+  // Jump straight into review with only the mistake-prone words, starting at the tapped card.
   const goReviewLeeches = (startId?: number) => {
     setReviewDeck('leeches');
     setReviewStartId(startId ?? null);
@@ -129,12 +129,9 @@ export default function App() {
             <div>
               <div className="flex items-center gap-1.5 text-sm sm:text-base font-extrabold tracking-tight">
                 EngMastery
-                <span className="rounded-md bg-indigo-50 px-1.5 py-0.5 text-[10px] font-bold text-indigo-600 dark:bg-indigo-950/70 dark:text-indigo-400">
-                  SRS
-                </span>
               </div>
               <div className="hidden sm:block text-[10px] font-medium text-slate-500 dark:text-slate-400">
-                Spaced Repetition Lab
+                English Learning Lab
               </div>
             </div>
           </div>
@@ -237,8 +234,8 @@ export default function App() {
       {/* Desktop Footer */}
       <footer className="hidden md:block border-t border-slate-200/60 dark:border-slate-800/60 py-4 text-center text-xs text-slate-400 dark:text-slate-500">
         <div className="mx-auto max-w-6xl px-4 flex items-center justify-between">
-          <div>EngMastery · Spaced Repetition English Lab</div>
-          <div>v2.0</div>
+          <div>EngMastery · English Learning Lab</div>
+          <div>v2.0.1</div>
         </div>
       </footer>
 
