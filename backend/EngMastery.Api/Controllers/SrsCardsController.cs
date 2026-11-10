@@ -20,7 +20,7 @@ public class SrsController : ControllerBase
         _logs = logs;
     }
 
-    /// <summary>Cards due for review, overdue first then highest mistake count.</summary>
+    /// <summary>Cards due for review: most-mistaken first, then overdue first.</summary>
     [HttpGet("due")]
     public async Task<ActionResult<List<CardDto>>> Due([FromQuery] int take = 50, [FromQuery] string? category = null)
     {
@@ -28,8 +28,8 @@ public class SrsController : ControllerBase
         var q = _db.VocabCards.Where(c => c.NextReviewDate <= now);
         if (!string.IsNullOrWhiteSpace(category)) q = q.Where(c => c.Category == category);
         var cards = await q
-            .OrderBy(c => c.NextReviewDate)
-            .ThenByDescending(c => c.MistakeCount)
+            .OrderByDescending(c => c.MistakeCount)
+            .ThenBy(c => c.NextReviewDate)
             .Take(Math.Clamp(take, 1, 200))
             .ToListAsync();
         return cards.Select(DtoMapper.ToDto).ToList();
@@ -83,13 +83,68 @@ public class CardsController : ControllerBase
         [FromQuery] string? status = null, [FromQuery] int take = 200)
     {
         var query = _db.VocabCards.AsQueryable();
-        if (!string.IsNullOrWhiteSpace(q))
-            query = query.Where(c => c.Term.Contains(q) || c.MeaningVi.Contains(q) || c.DefinitionEn.Contains(q));
         if (!string.IsNullOrWhiteSpace(category)) query = query.Where(c => c.Category == category);
         if (Enum.TryParse<CardStatus>(status, true, out var st)) query = query.Where(c => c.Status == st);
-        var cards = await query.OrderByDescending(c => c.MistakeCount).ThenBy(c => c.Term)
-            .Take(Math.Clamp(take, 1, 5000)).ToListAsync();
-        return cards.Select(DtoMapper.ToDto).ToList();
+
+        if (string.IsNullOrWhiteSpace(q))
+        {
+            var cards = await query.OrderByDescending(c => c.MistakeCount).ThenBy(c => c.Term)
+                .Take(Math.Clamp(take, 1, 5000)).ToListAsync();
+            return cards.Select(DtoMapper.ToDto).ToList();
+        }
+
+        // Fuzzy search: tolerate typos, e.g. "converyer belt" still finds "conveyor belt".
+        string normQ = System.Text.RegularExpressions.Regex.Replace(q.Trim().ToLowerInvariant(), @"\s+", " ");
+        var all = await query.ToListAsync();
+        var scored = new List<(VocabCard c, int rank, double sim)>();
+        foreach (var c in all)
+        {
+            string term = (c.Term ?? string.Empty).ToLowerInvariant();
+            string meaning = (c.MeaningVi ?? string.Empty).ToLowerInvariant();
+            string def = (c.DefinitionEn ?? string.Empty).ToLowerInvariant();
+            if (term.Contains(normQ) || meaning.Contains(normQ) || def.Contains(normQ))
+            {
+                scored.Add((c, 0, 1.0));
+                continue;
+            }
+            // Very short queries: exact substring only, avoid noise.
+            if (normQ.Length <= 2) continue;
+            double sim = FuzzyMatch(normQ, term, meaning);
+            if (sim >= 0.55) scored.Add((c, 1, sim));
+        }
+        var result = scored
+            .OrderBy(x => x.rank)
+            .ThenByDescending(x => x.sim)
+            .ThenByDescending(x => x.c.MistakeCount)
+            .Take(Math.Clamp(take, 1, 5000))
+            .Select(x => x.c)
+            .ToList();
+        return result.Select(DtoMapper.ToDto).ToList();
+    }
+
+    private static double FuzzyMatch(string q, string term, string meaning)
+    {
+        double best = OfflineEvaluator.Similarity(q, term);
+        var qTokens = q.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var targetTokens = (term + " " + meaning).Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (qTokens.Length > 0 && targetTokens.Length > 0)
+        {
+            double sum = 0;
+            foreach (var qt in qTokens)
+            {
+                double m = 0;
+                foreach (var tt in targetTokens)
+                {
+                    if (tt.Contains(qt) || qt.Contains(tt)) { m = 1; break; }
+                    double s = OfflineEvaluator.Similarity(qt, tt);
+                    if (s > m) m = s;
+                }
+                sum += m;
+            }
+            double tokenScore = sum / qTokens.Length;
+            if (tokenScore > best) best = tokenScore;
+        }
+        return best;
     }
 
     [HttpGet("{id}")]
