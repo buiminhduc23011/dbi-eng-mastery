@@ -20,12 +20,12 @@ public class SrsController : ControllerBase
         _logs = logs;
     }
 
-    /// <summary>Cards due for review: most-mistaken first, then overdue first.</summary>
+    /// <summary>Review queue: mistake-prone cards first (even if not strictly due yet), then overdue cards.</summary>
     [HttpGet("due")]
     public async Task<ActionResult<List<CardDto>>> Due([FromQuery] int take = 50, [FromQuery] string? category = null)
     {
         var now = DateTime.UtcNow;
-        var q = _db.VocabCards.Where(c => c.NextReviewDate <= now);
+        var q = _db.VocabCards.Where(c => c.NextReviewDate <= now || c.MistakeCount > 0);
         if (!string.IsNullOrWhiteSpace(category)) q = q.Where(c => c.Category == category);
         var cards = await q
             .OrderByDescending(c => c.MistakeCount)
