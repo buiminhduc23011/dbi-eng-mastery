@@ -55,9 +55,14 @@ echo '$Password' | sudo -S systemctl start engmastery
 echo '$Password' | sudo -S systemctl status engmastery --no-pager
 "@
 $cleanSshCommand = $sshCommand.Replace("`r", "")
-& ssh $RemoteHost $cleanSshCommand
+# ssh/sudo write prompts to stderr; don't let $ErrorActionPreference='Stop' fake a failure.
+$prevEAP = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
+& ssh $RemoteHost $cleanSshCommand 2>&1 | ForEach-Object { "$_" }
+$sshExit = $LASTEXITCODE
+$ErrorActionPreference = $prevEAP
 
-if ($LASTEXITCODE -eq 0) {
+if ($sshExit -eq 0) {
     Write-Host "`nEngMastery deployed: http://home-server:8090" -ForegroundColor Green
 } else {
     Write-Host "`nDeploy failed - service did not restart cleanly." -ForegroundColor Red
