@@ -11,10 +11,14 @@ if ($LASTEXITCODE -ne 0) { throw "Backend publish failed!" }
 
 Write-Host "`n[2/3] Building frontend..." -ForegroundColor Yellow
 Push-Location (Join-Path $RepoRoot 'frontend')
-& npm ci
-if ($LASTEXITCODE -ne 0) { throw "npm ci failed!" }
-& npm run build
-if ($LASTEXITCODE -ne 0) { throw "Frontend build failed!" }
+# npm writes progress info to stderr; don't let $ErrorActionPreference='Stop' kill the build on that.
+$prevEAP = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
+& npm ci 2>&1 | ForEach-Object { "$_" }
+if ($LASTEXITCODE -ne 0) { $ErrorActionPreference = $prevEAP; Pop-Location; throw "npm ci failed!" }
+& npm run build 2>&1 | ForEach-Object { "$_" }
+if ($LASTEXITCODE -ne 0) { $ErrorActionPreference = $prevEAP; Pop-Location; throw "Frontend build failed!" }
+$ErrorActionPreference = $prevEAP
 Pop-Location
 
 Write-Host "`n[3/3] Copying frontend dist -> server/wwwroot..." -ForegroundColor Yellow

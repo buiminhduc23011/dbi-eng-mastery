@@ -20,9 +20,10 @@ if ($LASTEXITCODE -ne 0) { throw "Build failed!" }
 # 2. Transfer
 Write-Host "`n[2/3] Transferring package to $RemoteHost..." -ForegroundColor Yellow
 $distPath = Join-Path $RepoRoot 'dist-engmastery'
-ssh -o BatchMode=yes "$RemoteHost" "rm -rf /tmp/engmastery-update"
+$serverPath = Join-Path $distPath 'server'
+ssh -o BatchMode=yes "$RemoteHost" "rm -rf /tmp/engmastery-update && mkdir -p /tmp/engmastery-update"
 if ($LASTEXITCODE -ne 0) { throw "Could not clean remote staging directory!" }
-scp -r -o BatchMode=yes "$distPath" "${RemoteHost}:/tmp/engmastery-update"
+scp -r -o BatchMode=yes "$serverPath" "${RemoteHost}:/tmp/engmastery-update/"
 if ($LASTEXITCODE -ne 0) { throw "SCP transfer failed!" }
 
 # 3. Install + restart (preserve SQLite data + uploaded wwwroot changes are overwritten by design)
@@ -34,11 +35,15 @@ echo '$Password' | sudo -S cp /tmp/engmastery.service /etc/systemd/system/engmas
 echo '$Password' | sudo -S systemctl daemon-reload
 echo '$Password' | sudo -S systemctl enable engmastery
 echo '$Password' | sudo -S systemctl stop engmastery
-echo '$Password' | sudo -S mkdir -p $RemoteDir
-echo '$Password' | sudo -S cp -f $RemoteDir/server/engmastery.db /tmp/engmastery-data-backup.db || true
+echo '$Password' | sudo -S mkdir -p $RemoteDir $RemoteDir/data
+# One-time migration: move DB out of the replaced server/ folder into data/ (kept across deploys).
+if [ -f $RemoteDir/server/engmastery.db ] && [ ! -f $RemoteDir/data/engmastery.db ]; then echo '$Password' | sudo -S cp -f $RemoteDir/server/engmastery.db $RemoteDir/data/engmastery.db || { echo 'DB migration failed'; exit 1; }; fi
+# Timestamped backup; abort if backup fails or is empty.
+echo '$Password' | sudo -S cp -f $RemoteDir/data/engmastery.db /tmp/engmastery-data-backup.db || { echo 'DB backup failed'; exit 1; }
+if [ ! -s /tmp/engmastery-data-backup.db ]; then echo 'DB backup is empty, aborting'; exit 1; fi
 echo '$Password' | sudo -S rm -rf $RemoteDir/server
 echo '$Password' | sudo -S mv /tmp/engmastery-update/server $RemoteDir/server
-echo '$Password' | sudo -S cp -f /tmp/engmastery-data-backup.db $RemoteDir/server/engmastery.db || true
+echo '$Password' | sudo -S cp -f /tmp/engmastery-data-backup.db $RemoteDir/data/engmastery.db
 echo '$Password' | sudo -S rm -f /tmp/engmastery-data-backup.db
 echo '$Password' | sudo -S chmod -R u+rwX $RemoteDir
 echo '$Password' | sudo -S chmod +x $RemoteDir/server/EngMastery.Api
