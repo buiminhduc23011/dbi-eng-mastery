@@ -983,11 +983,22 @@ public static partial class DataSeeder
             .Concat(GetExtraCards())
             .Concat(GetWorkCards())
             .Concat(GetCommunicationCards())
+            .Concat(GetAcsCards())
             .ToList();
         var missingCards = allCards.Where(c => !existingTerms.Contains(c.Term)).ToList();
         if (missingCards.Count > 0)
         {
             db.VocabCards.AddRange(missingCards);
+            await db.SaveChangesAsync();
+        }
+
+        // Keep category naming consistent for ACS cards added in earlier versions.
+        var legacyAcsCards = await db.VocabCards
+            .Where(c => c.Category == "ACS & AGV")
+            .ToListAsync();
+        if (legacyAcsCards.Count > 0)
+        {
+            foreach (var c in legacyAcsCards) c.Category = "Software & Dev";
             await db.SaveChangesAsync();
         }
 
