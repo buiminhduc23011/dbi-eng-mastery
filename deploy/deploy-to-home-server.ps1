@@ -39,8 +39,11 @@ echo '$Password' | sudo -S mkdir -p $RemoteDir $RemoteDir/data
 # One-time migration: move DB out of the replaced server/ folder into data/ (kept across deploys).
 if [ -f $RemoteDir/server/engmastery.db ] && [ ! -f $RemoteDir/data/engmastery.db ]; then echo '$Password' | sudo -S cp -f $RemoteDir/server/engmastery.db $RemoteDir/data/engmastery.db || { echo 'DB migration failed'; exit 1; }; fi
 # Timestamped backup; abort if backup fails or is empty.
-echo '$Password' | sudo -S cp -f $RemoteDir/data/engmastery.db /tmp/engmastery-data-backup.db || { echo 'DB backup failed'; exit 1; }
+echo '$Password' | sudo -S cp -f $RemoteDir/data/engmastery.db /tmp/engmastery-data-backup.db || { echo 'DB backup failed'; exit 1; };
 if [ ! -s /tmp/engmastery-data-backup.db ]; then echo 'DB backup is empty, aborting'; exit 1; fi
+# Persistent rotating backup inside data/ (survives /tmp cleanup and failed deploys).
+echo '$Password' | sudo -S cp -f $RemoteDir/data/engmastery.db $RemoteDir/data/engmastery.db.bak.`$(date +%Y%m%d-%H%M%S)
+echo '$Password' | sudo -S sh -c 'ls -t $RemoteDir/data/engmastery.db.bak.* 2>/dev/null | tail -n +4 | xargs -r rm -f'
 echo '$Password' | sudo -S rm -rf $RemoteDir/server
 echo '$Password' | sudo -S mv /tmp/engmastery-update/server $RemoteDir/server
 echo '$Password' | sudo -S cp -f /tmp/engmastery-data-backup.db $RemoteDir/data/engmastery.db

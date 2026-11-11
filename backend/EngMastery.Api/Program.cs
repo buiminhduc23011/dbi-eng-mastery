@@ -15,7 +15,8 @@ builder.Services.AddDbContext<AppDbContext>(opt =>
     if (useSqlServer)
         opt.UseSqlServer(sqlServerCs!);
     else
-        opt.UseSqlite(builder.Configuration.GetConnectionString("Sqlite") ?? "Data Source=engmastery.db");
+        opt.UseSqlite(ResolveSqliteConnectionString(
+            builder.Configuration.GetConnectionString("Sqlite") ?? "Data Source=appdata/engmastery.db"));
 });
 
 builder.Services.AddControllers();
@@ -30,6 +31,21 @@ builder.Services.AddCors(opt => opt.AddDefaultPolicy(p =>
     p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
 
 var app = builder.Build();
+
+// SQLite data file must live outside folders replaced by deploy (server/ is wiped each release).
+// Relative paths resolve against the app base directory; the folder is auto-created.
+static string ResolveSqliteConnectionString(string cs)
+{
+    const string key = "Data Source=";
+    int i = cs.IndexOf(key, StringComparison.OrdinalIgnoreCase);
+    if (i < 0) return cs;
+    string path = cs[(i + key.Length)..].Trim().Trim('"');
+    if (!Path.IsPathRooted(path))
+        path = Path.Combine(AppContext.BaseDirectory, path);
+    string? dir = Path.GetDirectoryName(path);
+    if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+    return cs[..(i + key.Length)] + path;
+}
 
 // Auto-migrate + seed on startup.
 using (var scope = app.Services.CreateScope())
