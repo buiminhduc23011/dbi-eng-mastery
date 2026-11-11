@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, type VocabCard } from '../lib/api';
-import { speak } from '../lib/speech';
+import { speak, stopSpeak } from '../lib/speech';
 import {
   Volume2,
+  VolumeX,
   RotateCcw,
   Sparkles,
   CheckCircle2,
@@ -60,6 +61,7 @@ export default function Review({ onSessionComplete, deck = 'due', startId = null
   const [done, setDone] = useState(false);
   const [rateError, setRateError] = useState('');
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [autoSpeak, setAutoSpeak] = useState(() => localStorage.getItem('review:autoSpeak') === '1');
 
   const card = queue[index];
 
@@ -122,6 +124,32 @@ export default function Review({ onSessionComplete, deck = 'due', startId = null
     speak(text);
     setTimeout(() => setIsSpeaking(false), 1200);
   };
+
+  const toggleAutoSpeak = () => {
+    setAutoSpeak((v) => {
+      const next = !v;
+      localStorage.setItem('review:autoSpeak', next ? '1' : '0');
+      if (!next) stopSpeak();
+      return next;
+    });
+  };
+
+  // Auto-read the new card aloud when enabled: flip mode reads the term on arrival,
+  // cloze mode reads it after the user checks (so the answer isn't spoiled upfront).
+  useEffect(() => {
+    if (!autoSpeak || loading || done || !card || mode !== 'flip') return;
+    playAudio(card.term);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSpeak, loading, done, card?.id, index, mode]);
+
+  useEffect(() => {
+    if (!autoSpeak || mode !== 'cloze' || !clozeChecked || !card) return;
+    playAudio(card.term);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSpeak, mode, clozeChecked, card?.id]);
+
+  // Stop any ongoing speech when leaving the review screen.
+  useEffect(() => () => stopSpeak(), []);
 
   const rate = useCallback(
     async (q: 1 | 2 | 3 | 4) => {
@@ -303,6 +331,19 @@ export default function Review({ onSessionComplete, deck = 'due', startId = null
             title="Tải lại danh sách thẻ"
           >
             <RotateCcw size={14} />
+          </button>
+
+          <button
+            onClick={toggleAutoSpeak}
+            title={autoSpeak ? 'Tắt tự động đọc thẻ mới' : 'Bật tự động đọc mỗi thẻ mới'}
+            className={`flex h-8 items-center gap-1.5 rounded-xl border px-2.5 text-[11px] font-bold shadow-sm transition active:scale-95 ${
+              autoSpeak
+                ? 'border-indigo-600 bg-indigo-600 text-white shadow-indigo-600/25'
+                : 'border-slate-200/80 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-800 dark:bg-[#111827] dark:text-slate-300'
+            }`}
+          >
+            {autoSpeak ? <Volume2 size={14} /> : <VolumeX size={14} />}
+            <span className="hidden sm:inline">{autoSpeak ? 'Tự đọc: Bật' : 'Tự đọc: Tắt'}</span>
           </button>
         </div>
       </div>
