@@ -284,6 +284,9 @@ public class TypingController : ControllerBase
         bool counted = false;
         if (passed)
         {
+            // Each correct typing reduces the lifetime wrong-count (floor at 0).
+            if (card.MistakeCount > 0) card.MistakeCount--;
+
             // Only advance streak if this card was actually DUE and hasn't passed today yet
             if (isDue && card.LastTypingPassDate != today)
             {
@@ -313,7 +316,7 @@ public class TypingController : ControllerBase
         await _logs.LogActivityAsync(cards: 1);
 
         return new TypingResultDto(passed, Math.Round(sim, 3), card.Term, card.MeaningVi,
-            card.ConsecutiveTypingPasses, RequiredStreak, mastered, counted, intervalDays);
+            card.ConsecutiveTypingPasses, RequiredStreak, mastered, counted, intervalDays, card.MistakeCount);
     }
 }
 

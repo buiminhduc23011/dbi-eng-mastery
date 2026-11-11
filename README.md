@@ -83,6 +83,6 @@ and restarts the service.
 
 ## SM-2 details
 
-Rating `q` maps to classic quality `0/3/4/5`. Fail (`q<3`): mistakes+1, rep=0, interval=1 day.
+Rating `q` maps to classic quality `0/3/4/5`. Fail (`q<3`): mistakes+1, rep=0, interval=1 day. (Typing: each correct answer also decrements the mistake counter, floor 0.)
 Pass: `EF += 0.1 − (5−q)(0.08 + (5−q)·0.02)` (min 1.3); intervals `1 → 6 → round(prev·EF)`.
 Status: `Mastered` at rep ≥ 6 & interval ≥ 21d; `Review` at rep ≥ 3; else `Learning`/`New`.

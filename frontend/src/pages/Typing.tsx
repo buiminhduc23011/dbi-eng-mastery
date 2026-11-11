@@ -13,6 +13,7 @@ interface TypingResult {
   mastered: boolean;
   countedToday: boolean;
   nextIntervalDays?: number;
+  mistakeCount?: number;
 }
 
 interface Props {
@@ -329,7 +330,7 @@ export default function Typing({ onWordMastered }: Props) {
                     <span>Chưa đúng — Đáp án: <span className="font-mono underline">{result.correctTerm}</span></span>
                   </div>
                   <div className="text-xs text-rose-700 dark:text-rose-300">
-                    Bạn gõ: &ldquo;{input}&rdquo; · Đã gõ sai từ này {card.mistakeCount + 1} lần
+                    Bạn gõ: &ldquo;{input}&rdquo; · Đã gõ sai từ này {result.mistakeCount ?? (card.mistakeCount + 1)} lần
                     · Chuỗi bị đặt lại về 0, sẽ hỏi lại vào ngày mai để củng cố.
                   </div>
                 </div>

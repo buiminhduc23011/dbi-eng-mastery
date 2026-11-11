@@ -28,7 +28,8 @@ public record TypingResultDto(
     int RequiredStreak,
     bool Mastered,
     bool CountedToday,
-    int NextIntervalDays);
+    int NextIntervalDays,
+    int MistakeCount);
 
 public record DrillDto(
     int Id, string Category, string PromptVi, string TargetEn,
