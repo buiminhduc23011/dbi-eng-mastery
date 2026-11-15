@@ -11,23 +11,59 @@ export default function Cards({ onCardsChanged }: Props) {
   const [categories, setCategories] = useState<string[]>([]);
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(48);
+  const [total, setTotal] = useState(0);
   const [editing, setEditing] = useState<(UpsertCard & { id?: number }) | null>(null);
   const [msg, setMsg] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const load = async () => {
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  const load = async (pageToLoad = page, size = pageSize, q = query, cat = category) => {
     setLoading(true);
     try {
-      const params: Record<string, string> = { take: '2000' };
-      if (query) params.q = query;
-      if (category) params.category = category;
+      const params: Record<string, string> = {
+        take: String(size),
+        skip: String(Math.max(0, pageToLoad - 1) * size),
+      };
+      if (q) params.q = q;
+      if (cat) params.category = cat;
       const r = await api.get<VocabCard[]>('/cards', { params });
+      const totalCount = Number(r.headers?.['x-total-count'] ?? r.data.length);
+      const safeTotal = Number.isFinite(totalCount) ? totalCount : r.data.length;
+      setTotal(safeTotal);
+      // Trang hiện tại trống (vd. vừa xoá thẻ cuối cùng của trang) → lùi về trang cuối còn dữ liệu.
+      if (r.data.length === 0 && safeTotal > 0 && pageToLoad > 1) {
+        const last = Math.max(1, Math.ceil(safeTotal / size));
+        await load(last, size, q, cat);
+        return;
+      }
       setCards(r.data);
+      setPage(pageToLoad);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch {
       setMsg('Không thể kết nối đến máy chủ backend.');
     } finally {
       setLoading(false);
     }
+  };
+
+  // Dãy số trang gọn: 1 … p-1 p p+1 … N
+  const pageItems = (): (number | 'ellipsis')[] => {
+    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
+    const keep = new Set(
+      [1, 2, page - 1, page, page + 1, totalPages - 1, totalPages].filter((n) => n >= 1 && n <= totalPages),
+    );
+    const out: (number | 'ellipsis')[] = [];
+    let prev = 0;
+    for (let n = 1; n <= totalPages; n++) {
+      if (!keep.has(n)) continue;
+      if (n - prev > 1) out.push('ellipsis');
+      out.push(n);
+      prev = n;
+    }
+    return out;
   };
 
   useEffect(() => {
@@ -44,7 +80,7 @@ export default function Cards({ onCardsChanged }: Props) {
       setEditing(null);
       setMsg('Đã lưu thẻ từ vựng thành công! ✅');
       setTimeout(() => setMsg(''), 3000);
-      await load();
+      await load(page);
       onCardsChanged?.();
       api.get<string[]>('/cards/categories').then((r) => setCategories(r.data)).catch(() => undefined);
     } catch {
@@ -56,7 +92,7 @@ export default function Cards({ onCardsChanged }: Props) {
     if (!confirm('Bạn có chắc chắn muốn xoá thẻ từ vựng này?')) return;
     try {
       await api.delete(`/cards/${id}`);
-      await load();
+      await load(page);
       onCardsChanged?.();
     } catch {
       setMsg('Lỗi khi xoá thẻ.');
@@ -81,7 +117,7 @@ export default function Cards({ onCardsChanged }: Props) {
       const payload = JSON.parse(await f.text());
       const r = await api.post('/backup/import', payload);
       setMsg(`Đã nhập dữ liệu: +${r.data.cardsAdded} thẻ, +${r.data.drillsAdded} câu luyện tập.`);
-      await load();
+      await load(1);
       onCardsChanged?.();
     } catch {
       setMsg('Nhập file thất bại: Định dạng file không hợp lệ.');
@@ -94,7 +130,7 @@ export default function Cards({ onCardsChanged }: Props) {
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-lg font-bold flex items-center gap-2">
           <BookOpen size={20} className="text-indigo-600 dark:text-indigo-400" />
-          Quản lý thẻ từ vựng ({cards.length})
+          Quản lý thẻ từ vựng ({total})
         </h2>
 
         <button
@@ -112,7 +148,7 @@ export default function Cards({ onCardsChanged }: Props) {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && load()}
+            onKeyDown={(e) => e.key === 'Enter' && load(1)}
             placeholder="Tìm kiếm từ hoặc nghĩa…"
             className="w-full rounded-2xl border border-slate-200/80 bg-white py-2 pl-9 pr-3 text-xs shadow-sm focus:border-indigo-500 focus:outline-none dark:border-slate-800 dark:bg-[#111827]"
           />
@@ -124,6 +160,7 @@ export default function Cards({ onCardsChanged }: Props) {
             value={category}
             onChange={(e) => {
               setCategory(e.target.value);
+              void load(1, pageSize, query, e.target.value);
             }}
             className="appearance-none rounded-2xl border border-slate-200/80 bg-white py-2 pl-3 pr-8 text-xs font-semibold shadow-sm dark:border-slate-800 dark:bg-[#111827]"
           >
@@ -138,7 +175,7 @@ export default function Cards({ onCardsChanged }: Props) {
         </div>
 
         <button
-          onClick={() => load()}
+          onClick={() => load(1)}
           className="rounded-2xl bg-slate-900 px-4 py-2 text-xs font-bold text-white dark:bg-slate-700"
         >
           Tìm
@@ -230,6 +267,69 @@ export default function Cards({ onCardsChanged }: Props) {
       {cards.length === 0 && !loading && (
         <div className="rounded-3xl border border-slate-200/80 bg-white p-8 text-center text-xs text-slate-500 dark:border-slate-800/80 dark:bg-[#111827]">
           Không tìm thấy thẻ từ vựng nào khớp với bộ lọc.
+        </div>
+      )}
+
+      {/* Pagination */}
+      {total > 0 && (
+        <div className="space-y-2 pt-1">
+          <div className="flex flex-wrap items-center justify-center gap-1.5">
+            <button
+              onClick={() => load(page - 1)}
+              disabled={page <= 1 || loading}
+              className="rounded-xl border border-slate-200/80 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-40 dark:border-slate-800 dark:bg-[#111827] dark:text-slate-300"
+            >
+              ‹ Trước
+            </button>
+            {pageItems().map((p, i) =>
+              p === 'ellipsis' ? (
+                <span key={`e${i}`} className="px-1 text-xs text-slate-400">
+                  …
+                </span>
+              ) : (
+                <button
+                  key={p}
+                  onClick={() => load(p)}
+                  disabled={loading}
+                  className={`min-w-[2rem] rounded-xl px-2 py-1.5 text-xs font-bold shadow-sm transition ${
+                    p === page
+                      ? 'bg-indigo-600 text-white shadow-indigo-600/25'
+                      : 'border border-slate-200/80 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-800 dark:bg-[#111827] dark:text-slate-300'
+                  }`}
+                >
+                  {p}
+                </button>
+              ),
+            )}
+            <button
+              onClick={() => load(page + 1)}
+              disabled={page >= totalPages || loading}
+              className="rounded-xl border border-slate-200/80 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-40 dark:border-slate-800 dark:bg-[#111827] dark:text-slate-300"
+            >
+              Sau ›
+            </button>
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                const size = Number(e.target.value);
+                setPageSize(size);
+                void load(1, size);
+              }}
+              title="Số thẻ mỗi trang"
+              className="rounded-xl border border-slate-200/80 bg-white px-2 py-1.5 text-xs font-semibold shadow-sm dark:border-slate-800 dark:bg-[#111827]"
+            >
+              {[24, 48, 96].map((n) => (
+                <option key={n} value={n}>
+                  {n}/trang
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="text-center text-[11px] text-slate-400">
+            Trang {page}/{totalPages} · Tổng {total} thẻ
+            {category ? ` · Chủ đề "${category}"` : ''}
+            {query ? ` · Tìm "${query}"` : ''}
+          </div>
         </div>
       )}
 

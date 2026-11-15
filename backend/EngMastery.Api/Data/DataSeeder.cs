@@ -984,6 +984,7 @@ public static partial class DataSeeder
             .Concat(GetWorkCards())
             .Concat(GetCommunicationCards())
             .Concat(GetAcsCards())
+            .Concat(GetToeicCards())
             .ToList();
         var missingCards = allCards.Where(c => !existingTerms.Contains(c.Term)).ToList();
         if (missingCards.Count > 0)

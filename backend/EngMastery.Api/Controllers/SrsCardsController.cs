@@ -20,7 +20,8 @@ public class SrsController : ControllerBase
         _logs = logs;
     }
 
-    /// <summary>Review queue: mistake-prone cards first (even if not strictly due yet), then overdue cards.</summary>
+    /// <summary>Review queue: mistake-prone cards first (even if not strictly due yet), then overdue cards.
+    /// The shortlist is shuffled so the session order is random instead of insertion order.</summary>
     [HttpGet("due")]
     public async Task<ActionResult<List<CardDto>>> Due([FromQuery] int take = 50, [FromQuery] string? category = null)
     {
@@ -32,10 +33,12 @@ public class SrsController : ControllerBase
             .ThenBy(c => c.NextReviewDate)
             .Take(Math.Clamp(take, 1, 200))
             .ToListAsync();
+        Shuffle(cards);
         return cards.Select(DtoMapper.ToDto).ToList();
     }
 
-    /// <summary>Cards frequently answered wrong (MistakeCount &gt; 0), hardest first — focused leech review.</summary>
+    /// <summary>Cards frequently answered wrong (MistakeCount &gt; 0), hardest first — focused leech review.
+    /// Shuffled within the shortlist for varied sessions.</summary>
     [HttpGet("leeches")]
     public async Task<ActionResult<List<CardDto>>> Leeches([FromQuery] int take = 50, [FromQuery] string? category = null)
     {
@@ -46,7 +49,17 @@ public class SrsController : ControllerBase
             .ThenBy(c => c.NextReviewDate)
             .Take(Math.Clamp(take, 1, 200))
             .ToListAsync();
+        Shuffle(cards);
         return cards.Select(DtoMapper.ToDto).ToList();
+    }
+
+    private static void Shuffle<T>(List<T> list)
+    {
+        for (int i = list.Count - 1; i > 0; i--)
+        {
+            int j = Random.Shared.Next(i + 1);
+            (list[i], list[j]) = (list[j], list[i]);
+        }
     }
 
     /// <summary>Submit a review with quality q: 1=Again, 2=Hard, 3=Good, 4=Easy.</summary>
@@ -80,16 +93,21 @@ public class CardsController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<List<CardDto>>> List(
         [FromQuery] string? q = null, [FromQuery] string? category = null,
-        [FromQuery] string? status = null, [FromQuery] int take = 200)
+        [FromQuery] string? status = null, [FromQuery] int take = 200,
+        [FromQuery] int skip = 0)
     {
+        skip = Math.Max(0, skip);
+        take = Math.Clamp(take, 1, 200);
         var query = _db.VocabCards.AsQueryable();
         if (!string.IsNullOrWhiteSpace(category)) query = query.Where(c => c.Category == category);
         if (Enum.TryParse<CardStatus>(status, true, out var st)) query = query.Where(c => c.Status == st);
 
         if (string.IsNullOrWhiteSpace(q))
         {
+            var total = await query.CountAsync();
+            Response.Headers["X-Total-Count"] = total.ToString();
             var cards = await query.OrderByDescending(c => c.MistakeCount).ThenBy(c => c.Term)
-                .Take(Math.Clamp(take, 1, 5000)).ToListAsync();
+                .Skip(skip).Take(take).ToListAsync();
             return cards.Select(DtoMapper.ToDto).ToList();
         }
 
@@ -116,10 +134,14 @@ public class CardsController : ControllerBase
             .OrderBy(x => x.rank)
             .ThenByDescending(x => x.sim)
             .ThenByDescending(x => x.c.MistakeCount)
-            .Take(Math.Clamp(take, 1, 5000))
-            .Select(x => x.c)
             .ToList();
-        return result.Select(DtoMapper.ToDto).ToList();
+        Response.Headers["X-Total-Count"] = result.Count.ToString();
+        return result
+            .Skip(skip)
+            .Take(take)
+            .Select(x => x.c)
+            .ToList()
+            .Select(DtoMapper.ToDto).ToList();
     }
 
     private static double FuzzyMatch(string q, string term, string meaning)

@@ -259,7 +259,8 @@ export default function Typing({ onWordMastered }: Props) {
 
             {card.partOfSpeech && (
               <div className="mt-1 text-xs italic text-slate-400">
-                ({card.partOfSpeech}) {card.phonetic && `· ${card.phonetic}`}
+                ({card.partOfSpeech})
+                {/* Phiên âm cố tình ẩn trước khi chấm để không đoán mò từ — hiện sau khi có kết quả. */}
               </div>
             )}
           </div>
@@ -333,6 +334,13 @@ export default function Typing({ onWordMastered }: Props) {
                     Bạn gõ: &ldquo;{input}&rdquo; · Đã gõ sai từ này {result.mistakeCount ?? (card.mistakeCount + 1)} lần
                     · Chuỗi bị đặt lại về 0, sẽ hỏi lại vào ngày mai để củng cố.
                   </div>
+                </div>
+              )}
+
+              {/* Phiên âm chỉ hiện sau khi chấm — vừa học phát âm vừa chống đoán mò. */}
+              {card.phonetic && (
+                <div className="mt-3 text-center font-mono text-sm text-indigo-600 dark:text-indigo-400">
+                  {card.phonetic}
                 </div>
               )}
 

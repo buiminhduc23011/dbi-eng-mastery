@@ -91,6 +91,12 @@ export default function Review({ onSessionComplete, deck = 'due', startId = null
       const params = cat ? { params: { category: cat, take: 50 } } : { params: { take: 50 } };
       const r = await api.get<VocabCard[]>(endpoint, params);
       let list = r.data;
+      // Shuffle so cards don't appear in insertion order (belt & braces:
+      // the API already shuffles, this guards cached/proxied responses too).
+      for (let i = list.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [list[i], list[j]] = [list[j], list[i]];
+      }
       // Start at the clicked word so review begins exactly where the user tapped.
       if (focusId) {
         const i = list.findIndex((c) => c.id === focusId);
