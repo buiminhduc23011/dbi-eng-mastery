@@ -69,9 +69,31 @@ export default function DashboardPage({ go, onRefresh, onStudyLeech }: Props) {
 
   if (loading && !data) {
     return (
-      <div className="flex min-h-[40vh] flex-col items-center justify-center p-8 text-center text-slate-500">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent" />
-        <div className="mt-3 text-xs font-semibold tracking-wide uppercase text-slate-400">Đang đồng bộ dữ liệu…</div>
+      <div className="space-y-4 sm:space-y-5 animate-pulse">
+        <div className="em-card p-6 h-48 flex flex-col justify-between">
+          <div className="space-y-3 max-w-md">
+            <div className="flex gap-2">
+              <div className="h-5 w-16 rounded-md bg-slate-200 dark:bg-slate-800" />
+              <div className="h-5 w-32 rounded-md bg-slate-200 dark:bg-slate-800" />
+            </div>
+            <div className="h-7 w-72 rounded-lg bg-slate-200 dark:bg-slate-800" />
+            <div className="h-4 w-full rounded bg-slate-100 dark:bg-slate-800/60" />
+          </div>
+          <div className="h-2 w-full max-w-md rounded-full bg-slate-100 dark:bg-slate-800" />
+        </div>
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="em-card p-4 h-28 space-y-3">
+              <div className="h-8 w-8 rounded-lg bg-slate-200 dark:bg-slate-800" />
+              <div className="h-5 w-20 rounded bg-slate-200 dark:bg-slate-800" />
+              <div className="h-3 w-24 rounded bg-slate-100 dark:bg-slate-800/60" />
+            </div>
+          ))}
+        </div>
+        <div className="grid gap-4 sm:gap-5 lg:grid-cols-12">
+          <div className="em-card p-5 h-72 lg:col-span-7" />
+          <div className="em-card p-5 h-72 lg:col-span-5" />
+        </div>
       </div>
     );
   }
@@ -82,6 +104,8 @@ export default function DashboardPage({ go, onRefresh, onStudyLeech }: Props) {
   const totalUpcoming = data.forecast.reduce((sum, f) => sum + f.count, 0);
   const progressPct = Math.min(100, Math.round((data.todayReviewed / Math.max(1, data.dailyTarget)) * 100));
   const masteryPct = Math.round((data.masteredCount / Math.max(1, data.totalCards)) * 100);
+  const ringCircumference = 2 * Math.PI * 26;
+  const ringOffset = ringCircumference - (progressPct / 100) * ringCircumference;
 
   const stats = [
     {
@@ -126,10 +150,14 @@ export default function DashboardPage({ go, onRefresh, onStudyLeech }: Props) {
   return (
     <div className="space-y-4 sm:space-y-5">
       {/* 1. Today's Command Center (Modern Sleek Hero) */}
-      <div className="relative overflow-hidden rounded-2xl border border-slate-200/90 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/90">
+      <div className="relative overflow-hidden rounded-2xl border border-slate-200/90 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800/80 dark:bg-[#111827]">
+        {/* Ambient Mesh Glow */}
+        <div className="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-indigo-500/10 blur-3xl dark:bg-indigo-500/15" />
+        <div className="pointer-events-none absolute -bottom-24 left-1/3 h-48 w-48 rounded-full bg-violet-500/10 blur-3xl dark:bg-violet-500/10" />
+
         <div className="relative z-10 flex flex-col justify-between gap-5 md:flex-row md:items-center">
           {/* Left info */}
-          <div className="space-y-2 max-w-xl">
+          <div className="space-y-2.5 max-w-xl">
             <div className="flex flex-wrap items-center gap-2 text-xs">
               <span className="inline-flex items-center gap-1 rounded-md bg-indigo-50 px-2 py-0.5 font-bold text-indigo-700 dark:bg-indigo-950/70 dark:text-indigo-300">
                 <Calendar size={12} />
@@ -147,7 +175,7 @@ export default function DashboardPage({ go, onRefresh, onStudyLeech }: Props) {
               )}
             </div>
 
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+            <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">
               {data.cardsDue > 0 ? (
                 <>
                   Bạn có <span className="text-indigo-600 dark:text-indigo-400">{data.cardsDue} thẻ</span> &{' '}
@@ -163,52 +191,98 @@ export default function DashboardPage({ go, onRefresh, onStudyLeech }: Props) {
             </p>
 
             {/* Daily Goal Mini Progress */}
-            <div className="pt-2">
-              <div className="flex items-center justify-between text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
-                <span className="flex items-center gap-1">
-                  <Target size={12} className="text-indigo-500" />
-                  Tiến độ mục tiêu ngày: <strong className="text-slate-800 dark:text-slate-200">{data.todayReviewed}/{data.dailyTarget} lượt</strong>
+            <div className="pt-1.5">
+              <div className="flex items-center justify-between text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">
+                <span className="flex items-center gap-1.5">
+                  <Target size={13} className="text-indigo-500" />
+                  Tiến độ mục tiêu ngày: <strong className="font-mono text-slate-800 dark:text-slate-200">{data.todayReviewed}/{data.dailyTarget}</strong> lượt
                 </span>
-                <span className="font-bold text-indigo-600 dark:text-indigo-400">{progressPct}%</span>
+                <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400">{progressPct}%</span>
               </div>
               <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
                 <div
-                  className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-all duration-700"
+                  className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500 transition-all duration-700"
                   style={{ width: `${progressPct}%` }}
                 />
               </div>
             </div>
           </div>
 
-          {/* Right Action Buttons */}
-          <div className="flex flex-col sm:flex-row md:flex-col gap-2.5 shrink-0 min-w-[200px]">
-            {data.cardsDue > 0 ? (
-              <button
-                onClick={() => go('review')}
-                className="group flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-xs sm:text-sm font-bold text-white shadow-sm shadow-indigo-600/30 transition-all hover:bg-indigo-700 active:scale-98"
-              >
-                <span>Bắt đầu ôn tập ({data.cardsDue} thẻ)</span>
-                <ArrowRight size={15} className="transition-transform group-hover:translate-x-1" />
-              </button>
-            ) : (
-              <button
-                onClick={() => go('review')}
-                className="group flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-xs sm:text-sm font-bold text-white shadow-sm transition-all hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 active:scale-98"
-              >
-                <span>Ôn lại bộ thẻ</span>
-                <ArrowRight size={15} className="transition-transform group-hover:translate-x-1" />
-              </button>
-            )}
+          {/* Right Action Buttons + Progress Ring */}
+          <div className="flex flex-col sm:flex-row md:flex-col items-stretch sm:items-center md:items-end gap-3 shrink-0">
+            {/* Circular Progress Ring (Desktop) */}
+            <div className="hidden md:flex items-center gap-3 rounded-xl border border-slate-200/70 bg-slate-50/80 px-3.5 py-2 dark:border-slate-800 dark:bg-slate-900/70">
+              <div className="relative flex h-14 w-14 items-center justify-center">
+                <svg className="h-14 w-14 -rotate-90" viewBox="0 0 60 60">
+                  <circle
+                    cx="30"
+                    cy="30"
+                    r="26"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="5"
+                    className="text-slate-200 dark:text-slate-800"
+                  />
+                  <circle
+                    cx="30"
+                    cy="30"
+                    r="26"
+                    fill="none"
+                    stroke="url(#heroRingGrad)"
+                    strokeWidth="5"
+                    strokeLinecap="round"
+                    strokeDasharray={ringCircumference}
+                    strokeDashoffset={ringOffset}
+                    className="transition-all duration-700"
+                  />
+                  <defs>
+                    <linearGradient id="heroRingGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                      <stop offset="0%" stopColor="#6366f1" />
+                      <stop offset="100%" stopColor="#8b5cf6" />
+                    </linearGradient>
+                  </defs>
+                </svg>
+                <span className="absolute font-mono text-xs font-extrabold text-slate-800 dark:text-slate-100">
+                  {progressPct}%
+                </span>
+              </div>
+              <div className="text-left">
+                <div className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Mục tiêu ngày</div>
+                <div className="font-mono text-sm font-bold text-slate-900 dark:text-white">
+                  {data.todayReviewed} / {data.dailyTarget}
+                </div>
+              </div>
+            </div>
 
-            {data.drillsDue > 0 && (
-              <button
-                onClick={() => go('drills')}
-                className="flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-xs sm:text-sm font-semibold text-slate-700 shadow-sm transition-all hover:bg-slate-50 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700/80 active:scale-98"
-              >
-                <PenLine size={14} className="text-sky-500" />
-                <span>Luyện {data.drillsDue} câu phản xạ</span>
-              </button>
-            )}
+            <div className="flex flex-col sm:flex-row md:flex-col gap-2 w-full sm:w-auto min-w-[215px]">
+              {data.cardsDue > 0 ? (
+                <button
+                  onClick={() => go('review')}
+                  className="group flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-3 text-xs sm:text-sm font-bold text-white shadow-md shadow-indigo-600/25 transition-all hover:brightness-110 hover:-translate-y-0.5 active:scale-95"
+                >
+                  <span>Bắt đầu ôn tập ({data.cardsDue} thẻ)</span>
+                  <ArrowRight size={15} className="transition-transform group-hover:translate-x-1" />
+                </button>
+              ) : (
+                <button
+                  onClick={() => go('review')}
+                  className="group flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-xs sm:text-sm font-bold text-white shadow-sm transition-all hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 active:scale-95"
+                >
+                  <span>Ôn lại bộ thẻ</span>
+                  <ArrowRight size={15} className="transition-transform group-hover:translate-x-1" />
+                </button>
+              )}
+
+              {data.drillsDue > 0 && (
+                <button
+                  onClick={() => go('drills')}
+                  className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs sm:text-sm font-semibold text-slate-700 shadow-sm transition-all hover:bg-slate-50 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-800/80 dark:text-slate-200 dark:hover:bg-slate-700/80 active:scale-95"
+                >
+                  <PenLine size={14} className="text-sky-500" />
+                  <span>Luyện {data.drillsDue} câu phản xạ</span>
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -263,27 +337,33 @@ export default function DashboardPage({ go, onRefresh, onStudyLeech }: Props) {
             </div>
 
             {/* Interactive Chart */}
-            <div className="flex h-36 items-end gap-2 sm:gap-3 px-1 pt-6 pb-2">
+            <div className="relative flex h-40 items-end gap-2 sm:gap-3 px-1 pt-8 pb-2">
+              {/* Subtle baseline */}
+              <div className="pointer-events-none absolute inset-x-1 bottom-7 border-b border-dashed border-slate-200 dark:border-slate-800" />
               {data.forecast.map((f, i) => {
                 const isToday = i === 0;
-                const barHeight = Math.max(8, (f.count / maxForecast) * 85);
+                const barHeight = Math.max(8, (f.count / maxForecast) * 88);
                 return (
                   <div key={f.date} className="group relative flex flex-1 flex-col items-center gap-1.5 h-full justify-end">
+                    {/* Hover Tooltip */}
+                    <div className="pointer-events-none absolute -top-1 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-0.5 text-[10px] font-bold text-white opacity-0 shadow-md transition-opacity group-hover:opacity-100 dark:bg-slate-100 dark:text-slate-900 z-10">
+                      {isToday ? 'Hôm nay' : f.date}: {f.count} thẻ
+                    </div>
                     <span
-                      className={`text-[10px] font-bold transition-all ${
+                      className={`font-mono text-[10px] font-bold transition-all ${
                         isToday
                           ? 'text-indigo-600 dark:text-indigo-400 scale-105'
-                          : 'text-slate-500 dark:text-slate-400'
+                          : 'text-slate-500 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-white'
                       }`}
                     >
                       {f.count}
                     </span>
                     <div
-                      className={`w-full rounded-t-md transition-all duration-300 group-hover:opacity-90 ${
+                      className={`w-full rounded-t-lg transition-all duration-300 group-hover:brightness-110 ${
                         isToday
-                          ? 'bg-indigo-600 dark:bg-indigo-500 shadow-sm shadow-indigo-500/30'
+                          ? 'bg-gradient-to-t from-indigo-600 to-violet-500 shadow-sm shadow-indigo-500/30'
                           : f.count > 0
-                          ? 'bg-indigo-200 dark:bg-indigo-900/60'
+                          ? 'bg-indigo-200 dark:bg-indigo-900/60 group-hover:bg-indigo-300 dark:group-hover:bg-indigo-800/80'
                           : 'bg-slate-100 dark:bg-slate-800'
                       }`}
                       style={{ height: `${barHeight}px` }}
@@ -360,29 +440,34 @@ export default function DashboardPage({ go, onRefresh, onStudyLeech }: Props) {
                     key={l.id}
                     onClick={() => onStudyLeech?.(l.id)}
                     title="Bấm để ôn ngay các từ hay sai"
-                    className="flex cursor-pointer items-center justify-between rounded-xl border border-slate-100 bg-slate-50/70 p-2 transition-all hover:bg-indigo-50 hover:border-indigo-200 active:scale-98 dark:border-slate-800/60 dark:bg-slate-800/40 dark:hover:bg-slate-800/80"
+                    className="group flex cursor-pointer items-center justify-between rounded-xl border border-slate-100 bg-slate-50/70 p-2.5 transition-all hover:bg-indigo-50/80 hover:border-indigo-200 active:scale-98 dark:border-slate-800/60 dark:bg-slate-800/40 dark:hover:bg-slate-800/80 dark:hover:border-indigo-800/60"
                   >
-                    <div className="flex items-center gap-2 min-w-0">
+                    <div className="flex items-center gap-2.5 min-w-0">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           speak(l.term);
                         }}
-                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white text-slate-600 shadow-xs hover:bg-indigo-50 hover:text-indigo-600 dark:bg-slate-700 dark:text-slate-300 transition"
+                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white text-slate-600 shadow-xs hover:bg-indigo-100 hover:text-indigo-600 dark:bg-slate-700 dark:text-slate-300 transition"
                         title="Nghe phát âm"
                       >
                         <Volume2 size={13} />
                       </button>
                       <div className="min-w-0">
-                        <div className="font-bold text-xs tracking-tight truncate text-slate-900 dark:text-white">
+                        <div className="font-bold text-xs tracking-tight truncate text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
                           {l.term}
                         </div>
                         <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{l.meaningVi}</div>
                       </div>
                     </div>
-                    <span className="shrink-0 rounded-md bg-rose-100/80 px-2 py-0.5 text-[10px] font-bold text-rose-700 dark:bg-rose-950/80 dark:text-rose-300">
-                      ×{l.mistakeCount} lỗi
-                    </span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="hidden sm:inline-block text-[10px] font-bold text-indigo-600 dark:text-indigo-400 opacity-0 transition-opacity group-hover:opacity-100">
+                        Ôn →
+                      </span>
+                      <span className="rounded-md bg-rose-100/80 px-2 py-0.5 text-[10px] font-bold text-rose-700 dark:bg-rose-950/80 dark:text-rose-300">
+                        ×{l.mistakeCount} lỗi
+                      </span>
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -411,10 +496,10 @@ export default function DashboardPage({ go, onRefresh, onStudyLeech }: Props) {
           {/* Card 1: Sentence Drills */}
           <div
             onClick={() => go('drills')}
-            className="group flex flex-col justify-between rounded-xl border border-slate-200/80 bg-white p-4 shadow-sm transition-all duration-200 hover:border-sky-400 hover:shadow-md cursor-pointer active:scale-98 dark:border-slate-800 dark:bg-slate-900/80 dark:hover:border-sky-500"
+            className="em-card-interactive group flex flex-col justify-between p-4 cursor-pointer hover:border-sky-400 dark:hover:border-sky-500"
           >
             <div className="flex items-center justify-between">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-50 text-sky-600 dark:bg-sky-950/60 dark:text-sky-400">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-50 text-sky-600 transition-transform group-hover:scale-105 dark:bg-sky-950/60 dark:text-sky-400">
                 <PenLine size={18} />
               </div>
               <ArrowRight size={15} className="text-slate-400 transition-transform group-hover:translate-x-1 group-hover:text-sky-600 dark:group-hover:text-sky-400" />
@@ -430,10 +515,10 @@ export default function DashboardPage({ go, onRefresh, onStudyLeech }: Props) {
           {/* Card 2: Shadowing Studio */}
           <div
             onClick={() => go('shadowing')}
-            className="group flex flex-col justify-between rounded-xl border border-slate-200/80 bg-white p-4 shadow-sm transition-all duration-200 hover:border-emerald-400 hover:shadow-md cursor-pointer active:scale-98 dark:border-slate-800 dark:bg-slate-900/80 dark:hover:border-emerald-500"
+            className="em-card-interactive group flex flex-col justify-between p-4 cursor-pointer hover:border-emerald-400 dark:hover:border-emerald-500"
           >
             <div className="flex items-center justify-between">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 transition-transform group-hover:scale-105 dark:bg-emerald-950/60 dark:text-emerald-400">
                 <Mic size={18} />
               </div>
               <ArrowRight size={15} className="text-slate-400 transition-transform group-hover:translate-x-1 group-hover:text-emerald-600 dark:group-hover:text-emerald-400" />
@@ -449,10 +534,10 @@ export default function DashboardPage({ go, onRefresh, onStudyLeech }: Props) {
           {/* Card 3: AI Translator */}
           <div
             onClick={() => go('translator')}
-            className="group flex flex-col justify-between rounded-xl border border-slate-200/80 bg-white p-4 shadow-sm transition-all duration-200 hover:border-indigo-400 hover:shadow-md cursor-pointer active:scale-98 dark:border-slate-800 dark:bg-slate-900/80 dark:hover:border-indigo-500"
+            className="em-card-interactive group flex flex-col justify-between p-4 cursor-pointer hover:border-indigo-400 dark:hover:border-indigo-500"
           >
             <div className="flex items-center justify-between">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 transition-transform group-hover:scale-105 dark:bg-indigo-950/60 dark:text-indigo-400">
                 <Sparkles size={18} />
               </div>
               <ArrowRight size={15} className="text-slate-400 transition-transform group-hover:translate-x-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-400" />

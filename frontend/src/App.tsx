@@ -137,7 +137,7 @@ export default function App() {
           </div>
 
           {/* Desktop Navigation */}
-          <nav className="hidden items-center gap-1 md:flex">
+          <nav className="hidden items-center gap-0.5 rounded-xl border border-slate-200/70 bg-slate-100/80 p-1 dark:border-slate-800/80 dark:bg-slate-900/90 md:flex">
             {ALL_TABS.map((t) => {
               const badge = getBadge(t.badgeKey);
               const active = tab === t.id;
@@ -145,20 +145,20 @@ export default function App() {
                 <button
                   key={t.id}
                   onClick={() => go(t.id)}
-                  className={`relative flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-all ${
+                  className={`relative flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-all duration-150 ${
                     active
-                      ? 'bg-slate-900 text-white shadow-sm dark:bg-white dark:text-slate-900'
-                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800/60 dark:hover:text-white'
+                      ? 'bg-white text-indigo-600 shadow-sm dark:bg-slate-800 dark:text-indigo-400'
+                      : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100'
                   }`}
                 >
-                  <t.icon size={14} className={active ? 'stroke-[2.2]' : 'stroke-[1.8]'} />
+                  <t.icon size={14} className={active ? 'stroke-[2.3]' : 'stroke-[1.8]'} />
                   <span>{t.label}</span>
                   {badge && (
                     <span
-                      className={`ml-0.5 rounded-full px-1.5 py-0.2 text-[10px] font-bold ${
+                      className={`ml-0.5 rounded-full px-1.5 py-0.2 text-[10px] font-bold leading-tight ${
                         active
-                          ? 'bg-white/20 text-white dark:bg-slate-900/20 dark:text-slate-900'
-                          : 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/60 dark:text-indigo-300'
+                          ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/80 dark:text-indigo-300'
+                          : 'bg-indigo-600 text-white dark:bg-indigo-500/90 dark:text-white'
                       }`}
                     >
                       {badge}
@@ -170,7 +170,7 @@ export default function App() {
           </nav>
 
           {/* Header Quick Stats & Controls */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2">
             {/* Streak Badge */}
             {dashData && dashData.streak > 0 && (
               <div
@@ -185,13 +185,21 @@ export default function App() {
             {/* Daily Target Progress Pill */}
             {dashData && (
               <div
-                className="hidden sm:flex items-center gap-1 rounded-lg bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-800/80 dark:text-slate-300"
+                className="hidden sm:flex items-center gap-2 rounded-lg border border-slate-200/70 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
                 title="Tiến độ mục tiêu hôm nay"
               >
-                <Target size={13} className="text-indigo-500 dark:text-indigo-400" />
-                <span>
+                <Target size={13} className="text-indigo-500 dark:text-indigo-400 shrink-0" />
+                <span className="font-mono text-[11px]">
                   {dashData.todayReviewed}/{dashData.dailyTarget}
                 </span>
+                <div className="h-1.5 w-10 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+                  <div
+                    className="h-full rounded-full bg-indigo-500 transition-all duration-500"
+                    style={{
+                      width: `${Math.min(100, Math.round((dashData.todayReviewed / Math.max(1, dashData.dailyTarget)) * 100))}%`,
+                    }}
+                  />
+                </div>
               </div>
             )}
 
@@ -199,7 +207,7 @@ export default function App() {
             <button
               onClick={() => go('settings')}
               className={`flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200/80 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50 hover:text-slate-900 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white ${
-                tab === 'settings' ? 'ring-2 ring-indigo-500/50' : ''
+                tab === 'settings' ? 'ring-2 ring-indigo-500/60 text-indigo-600 dark:text-indigo-400' : ''
               }`}
               title="Cài đặt hệ thống"
               aria-label="Cài đặt"
@@ -212,6 +220,7 @@ export default function App() {
               onClick={() => setDark((d) => !d)}
               className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200/80 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50 hover:text-slate-900 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
               aria-label="Toggle theme"
+              title={dark ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối'}
             >
               {dark ? <Sun size={15} className="text-amber-400" /> : <Moon size={15} />}
             </button>
@@ -220,7 +229,7 @@ export default function App() {
       </header>
 
       {/* Main Content Area */}
-      <main className="mx-auto w-full max-w-6xl flex-1 px-3 py-4 sm:px-4 sm:py-6 pb-24 md:pb-8">
+      <main key={tab} className="mx-auto w-full max-w-6xl flex-1 px-3 py-4 sm:px-4 sm:py-6 pb-24 md:pb-8 animate-fade-in-up">
         {tab === 'dashboard' && <DashboardPage go={go} onRefresh={refreshDashboard} onStudyLeech={goReviewLeeches} />}
         {tab === 'review' && <Review key={reviewKey} deck={reviewDeck} startId={reviewStartId} reloadKey={reviewKey} onSessionComplete={refreshDashboard} />}
         {tab === 'typing' && <Typing onWordMastered={refreshDashboard} />}
@@ -256,9 +265,12 @@ export default function App() {
                 }`}
               >
                 <div className="relative">
+                  {active && (
+                    <span className="absolute -top-2 left-1/2 h-0.5 w-5 -translate-x-1/2 rounded-full bg-indigo-600 dark:bg-indigo-400" />
+                  )}
                   <t.icon size={18} className={active ? 'stroke-[2.4]' : 'stroke-[1.8]'} />
                   {badge && (
-                    <span className="absolute -top-1.5 -right-2 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-extrabold text-white">
+                    <span className="absolute -top-1.5 -right-2 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-extrabold text-white shadow-sm">
                       {badge}
                     </span>
                   )}
@@ -291,7 +303,7 @@ export default function App() {
             onClick={() => setSheetOpen(false)}
           />
 
-          <div className="relative z-10 rounded-t-2xl border-t border-slate-200/80 bg-white p-4 shadow-2xl dark:border-slate-800/80 dark:bg-[#111827] pb-safe max-h-[85vh] overflow-y-auto">
+          <div className="relative z-10 rounded-t-2xl border-t border-slate-200/80 bg-white p-4 shadow-2xl dark:border-slate-800/80 dark:bg-[#111827] pb-safe max-h-[85vh] overflow-y-auto animate-sheet-up">
             <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-slate-300 dark:bg-slate-700" />
 
             <div className="mb-3 flex items-center justify-between">

@@ -32,12 +32,56 @@ function accuracy(a: string, b: string): number {
   return Math.max(0, 1 - d[m][n] / Math.max(m, n));
 }
 
+function highlightTermInSentence(sentence: string, term: string) {
+  if (!sentence || !term.trim()) return sentence;
+  const escaped = term.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const regex = new RegExp(`(${escaped})`, 'gi');
+  const parts = sentence.split(regex);
+  if (parts.length === 1) return sentence;
+  return parts.map((part, i) =>
+    regex.test(part) ? (
+      <mark
+        key={i}
+        className="rounded-md bg-indigo-100 px-1.5 py-0.5 font-bold text-indigo-700 dark:bg-indigo-950/90 dark:text-indigo-300"
+      >
+        {part}
+      </mark>
+    ) : (
+      <span key={i}>{part}</span>
+    ),
+  );
+}
+
 const RATING_CONFIG = [
   null,
-  { label: 'Again', sub: 'Quên hẳn', icon: RotateCcw, color: 'bg-rose-500 hover:bg-rose-600 text-white shadow-rose-500/25' },
-  { label: 'Hard', sub: 'Hơi khó', icon: AlertCircle, color: 'bg-amber-500 hover:bg-amber-600 text-white shadow-amber-500/25' },
-  { label: 'Good', sub: 'Nhớ tốt', icon: ThumbsUp, color: 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/25' },
-  { label: 'Easy', sub: 'Rất dễ', icon: Sparkles, color: 'bg-sky-600 hover:bg-sky-700 text-white shadow-sky-600/25' },
+  {
+    label: 'Again',
+    sub: 'Quên hẳn',
+    icon: RotateCcw,
+    color:
+      'border border-rose-200/80 bg-rose-50 text-rose-700 hover:bg-rose-500 hover:text-white hover:border-rose-500 dark:border-rose-900/60 dark:bg-rose-950/50 dark:text-rose-300 dark:hover:bg-rose-600 dark:hover:text-white',
+  },
+  {
+    label: 'Hard',
+    sub: 'Hơi khó',
+    icon: AlertCircle,
+    color:
+      'border border-amber-200/80 bg-amber-50 text-amber-700 hover:bg-amber-500 hover:text-white hover:border-amber-500 dark:border-amber-900/60 dark:bg-amber-950/50 dark:text-amber-300 dark:hover:bg-amber-600 dark:hover:text-white',
+  },
+  {
+    label: 'Good',
+    sub: 'Nhớ tốt',
+    icon: ThumbsUp,
+    color:
+      'border border-emerald-200/80 bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 dark:border-emerald-900/60 dark:bg-emerald-950/50 dark:text-emerald-300 dark:hover:bg-emerald-600 dark:hover:text-white',
+  },
+  {
+    label: 'Easy',
+    sub: 'Rất dễ',
+    icon: Sparkles,
+    color:
+      'border border-sky-200/80 bg-sky-50 text-sky-700 hover:bg-sky-600 hover:text-white hover:border-sky-600 dark:border-sky-900/60 dark:bg-sky-950/50 dark:text-sky-300 dark:hover:bg-sky-600 dark:hover:text-white',
+  },
 ] as const;
 
 interface Props {
@@ -61,7 +105,7 @@ export default function Review({ onSessionComplete, deck = 'due', startId = null
   const [done, setDone] = useState(false);
   const [rateError, setRateError] = useState('');
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [autoSpeak, setAutoSpeak] = useState(() => localStorage.getItem('review:autoSpeak') === '1');
+  const [autoSpeak, setAutoSpeak] = useState(() => localStorage.getItem('review:autoSpeak') !== '0');
 
   const card = queue[index];
 
@@ -354,9 +398,21 @@ export default function Review({ onSessionComplete, deck = 'due', startId = null
         </div>
       </div>
 
+      {/* Priority Mistake Banner */}
+      {!loading && !done && card && card.mistakeCount > 0 && (
+        <div className="flex items-center justify-between gap-2 rounded-xl border border-rose-200/80 bg-rose-50/80 px-3.5 py-2 text-xs font-semibold text-rose-800 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-200">
+          <span>
+            🔥 Đang ưu tiên ôn <b>{queue.length} từ lỗi</b> trước khi qua từ mới
+          </span>
+          <span className="shrink-0 rounded-md bg-rose-100 px-2 py-0.5 font-mono text-[11px] font-bold text-rose-700 dark:bg-rose-900/60 dark:text-rose-300">
+            ×{card.mistakeCount} lỗi
+          </span>
+        </div>
+      )}
+
       {/* Loading State */}
       {loading && (
-        <div className="flex min-h-[50vh] flex-col items-center justify-center rounded-3xl border border-slate-200/80 bg-white p-8 text-center dark:border-slate-800/80 dark:bg-[#111827]">
+        <div className="flex min-h-[360px] flex-col items-center justify-center rounded-3xl border border-slate-200/80 bg-white p-8 text-center shadow-sm dark:border-slate-800/80 dark:bg-[#111827] animate-pulse">
           <div className="h-10 w-10 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent" />
           <div className="mt-3 text-sm font-semibold text-slate-600 dark:text-slate-400">Đang chuẩn bị thẻ ôn tập…</div>
         </div>
@@ -422,16 +478,23 @@ export default function Review({ onSessionComplete, deck = 'due', startId = null
               >
                 {/* Front Side */}
                 <div className="backface-hidden flex min-h-[300px] sm:min-h-[330px] flex-col items-center justify-between text-center">
-                  <div className="flex w-full items-center justify-between">
-                    <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700 dark:bg-indigo-950/80 dark:text-indigo-300">
-                      {card.category}
-                    </span>
+                  <div className="flex w-full items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700 dark:bg-indigo-950/80 dark:text-indigo-300">
+                        {card.category}
+                      </span>
+                      {card.partOfSpeech && (
+                        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold italic text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                          {card.partOfSpeech}
+                        </span>
+                      )}
+                    </div>
                     <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-500 dark:bg-slate-800 dark:text-slate-400">
                       {card.status}
                     </span>
                   </div>
 
-                  <div className="my-auto py-4 space-y-2">
+                  <div className="my-auto py-4 space-y-2.5">
                     <div className="text-3xl sm:text-4xl font-black tracking-tight text-slate-900 dark:text-white">
                       {card.term}
                     </div>
@@ -455,14 +518,15 @@ export default function Review({ onSessionComplete, deck = 'due', startId = null
                         }`}
                       >
                         <Volume2 size={16} className={isSpeaking ? 'animate-bounce text-indigo-600' : ''} />
-                        <span>Nghe từ (R)</span>
+                        <span>Nghe từ</span>
+                        <kbd className="em-kbd ml-0.5">R</kbd>
                       </button>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-1 text-xs font-medium text-slate-400">
+                  <div className="flex items-center gap-1.5 text-xs font-medium text-slate-400">
                     <HelpCircle size={14} />
-                    <span>Chạm vào thẻ để xem định nghĩa & ví dụ câu</span>
+                    <span>Chạm vào thẻ hoặc nhấn Space để xem ví dụ</span>
                   </div>
                 </div>
 
@@ -478,14 +542,23 @@ export default function Review({ onSessionComplete, deck = 'due', startId = null
                   </div>
 
                   <div className="my-auto py-4 space-y-3.5 text-center">
+                    <div className="text-xl font-extrabold text-slate-900 dark:text-white">
+                      {card.term}
+                      {card.phonetic && (
+                        <span className="ml-2 font-mono text-xs font-normal text-indigo-600 dark:text-indigo-400">
+                          {card.phonetic}
+                        </span>
+                      )}
+                    </div>
+
                     {card.definitionEn && (
-                      <div className="rounded-2xl bg-slate-50 p-3.5 text-xs sm:text-sm italic text-slate-600 dark:bg-slate-800/50 dark:text-slate-300 leading-relaxed">
+                      <div className="rounded-2xl border border-slate-100 bg-slate-50/90 p-3.5 text-xs sm:text-sm italic text-slate-600 dark:border-slate-800/80 dark:bg-slate-800/40 dark:text-slate-300 leading-relaxed">
                         &ldquo;{card.definitionEn}&rdquo;
                       </div>
                     )}
 
                     <div className="text-sm sm:text-base font-medium text-slate-800 dark:text-slate-100 leading-relaxed px-2">
-                      📌 {card.exampleSentence}
+                      {highlightTermInSentence(card.exampleSentence, card.term)}
                     </div>
 
                     <div className="pt-1">
@@ -497,9 +570,14 @@ export default function Review({ onSessionComplete, deck = 'due', startId = null
                         className="inline-flex items-center gap-1.5 rounded-2xl border border-slate-200 bg-slate-100/80 px-4 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200 active:scale-95 dark:border-slate-800 dark:bg-slate-800/80 dark:text-slate-200"
                       >
                         <Volume2 size={16} />
-                        <span>Nghe cả câu (R)</span>
+                        <span>Nghe cả câu</span>
+                        <kbd className="em-kbd ml-0.5">R</kbd>
                       </button>
                     </div>
+                  </div>
+
+                  <div className="text-center text-[11px] font-medium text-slate-400">
+                    Chạm để lật lại · Chọn mức độ nhớ bên dưới
                   </div>
                 </div>
               </div>
@@ -611,7 +689,7 @@ export default function Review({ onSessionComplete, deck = 'due', startId = null
             </button>
           ) : (
             /* 4 Rating Buttons */
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-4 gap-2 sm:gap-2.5">
               {([1, 2, 3, 4] as const).map((q) => {
                 const cfg = RATING_CONFIG[q];
                 const isSuggested = mode === 'cloze' && clozeChecked && q === suggested;
@@ -621,11 +699,12 @@ export default function Review({ onSessionComplete, deck = 'due', startId = null
                     onClick={() => rate(q)}
                     className={`group relative flex flex-col items-center justify-center rounded-2xl py-3 px-1.5 font-bold shadow-sm transition-all active:scale-95 ${
                       cfg.color
-                    } ${isSuggested ? 'ring-4 ring-offset-2 ring-indigo-500' : ''}`}
+                    } ${isSuggested ? 'ring-2 ring-offset-2 ring-indigo-500 dark:ring-offset-[#0b0f19]' : ''}`}
                   >
-                    <cfg.icon size={18} className="mb-0.5" />
-                    <span className="text-xs sm:text-sm">{q} · {cfg.label}</span>
-                    <span className="text-[10px] opacity-80 hidden sm:inline-block">{cfg.sub}</span>
+                    <span className="em-kbd absolute right-1.5 top-1.5 hidden sm:inline-flex opacity-70">{q}</span>
+                    <cfg.icon size={18} className="mb-1 transition-transform group-hover:scale-110" />
+                    <span className="text-xs sm:text-sm">{cfg.label}</span>
+                    <span className="text-[10px] font-medium opacity-80 hidden sm:inline-block">{cfg.sub}</span>
                   </button>
                 );
               })}

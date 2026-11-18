@@ -34,6 +34,11 @@ public static class Sm2Service
         }
         else
         {
+            // Decrement mistake counter on solid recall so leech cards eventually graduate:
+            // Good (3) -> -1, Easy (4) -> -2, Hard (2) -> unchanged (still needs reinforcement).
+            if (buttonRating == 3 && card.MistakeCount > 0) card.MistakeCount--;
+            else if (buttonRating == 4 && card.MistakeCount > 0) card.MistakeCount = Math.Max(0, card.MistakeCount - 2);
+
             // Update ease factor: EF' = EF + (0.1 - (5-q) * (0.08 + (5-q) * 0.02)), floor 1.3
             double ef = card.EaseFactor + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02));
             card.EaseFactor = Math.Max(1.3, Math.Round(ef, 2));
@@ -46,6 +51,7 @@ public static class Sm2Service
                 _ => (int)Math.Round(card.IntervalDays <= 0 ? 6 * card.EaseFactor : card.IntervalDays * card.EaseFactor),
             };
             if (card.IntervalDays < 1) card.IntervalDays = 1;
+            if (card.MistakeCount > 0) card.IntervalDays = 1;
         }
 
         card.LastReviewedAt = utcNow;

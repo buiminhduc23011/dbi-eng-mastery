@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { api, type AiPolishResult } from '../lib/api';
-import { Loader2, Languages, Plus, Check, Sparkles, Briefcase, Coffee, BookMarked, AlertCircle } from 'lucide-react';
+import { speak } from '../lib/speech';
+import { Loader2, Languages, Plus, Check, Sparkles, Briefcase, Coffee, BookMarked, AlertCircle, Volume2, Copy } from 'lucide-react';
 
 interface Props {
   onCardSaved?: () => void;
@@ -14,6 +15,13 @@ export default function Translator({ onCardSaved }: Props) {
   const [savedSet, setSavedSet] = useState<Set<number>>(new Set());
   const [error, setError] = useState('');
   const [savedMsg, setSavedMsg] = useState('');
+  const [copiedKey, setCopiedKey] = useState<'biz' | 'cas' | null>(null);
+
+  const copyText = (text: string, key: 'biz' | 'cas') => {
+    navigator.clipboard?.writeText(text).catch(() => undefined);
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey(null), 1800);
+  };
 
   const polish = async () => {
     if (!input.trim()) return;
@@ -108,7 +116,7 @@ export default function Translator({ onCardSaved }: Props) {
 
       {/* Results */}
       {result && (
-        <div className="space-y-3 pt-2">
+        <div className="space-y-3 pt-2 animate-scale-in">
           <div className="flex items-center justify-between text-xs">
             {result.usedAi ? (
               <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-3 py-1 font-bold text-violet-700 dark:bg-violet-950 dark:text-violet-300">
@@ -123,9 +131,28 @@ export default function Translator({ onCardSaved }: Props) {
 
           {/* Business English */}
           <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-[#111827]">
-            <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 mb-1">
-              <Briefcase size={14} />
-              <span>Tiếng Anh công sở (Business English)</span>
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+                <Briefcase size={14} />
+                <span>Tiếng Anh công sở (Business English)</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => speak(result.businessEnglish)}
+                  className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-100 text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 dark:bg-slate-800 dark:text-slate-300 transition"
+                  title="Nghe phát âm"
+                >
+                  <Volume2 size={14} />
+                </button>
+                <button
+                  onClick={() => copyText(result.businessEnglish, 'biz')}
+                  className="flex h-7 items-center gap-1 rounded-lg bg-slate-100 px-2 text-[11px] font-semibold text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 dark:bg-slate-800 dark:text-slate-300 transition"
+                  title="Sao chép"
+                >
+                  {copiedKey === 'biz' ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}
+                  <span>{copiedKey === 'biz' ? 'Đã chép' : 'Chép'}</span>
+                </button>
+              </div>
             </div>
             <div className="text-sm sm:text-base font-semibold text-slate-800 dark:text-slate-100 leading-relaxed">
               {result.businessEnglish}
@@ -134,9 +161,28 @@ export default function Translator({ onCardSaved }: Props) {
 
           {/* Casual English */}
           <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-[#111827]">
-            <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 mb-1">
-              <Coffee size={14} />
-              <span>Giao tiếp tự nhiên (Casual English)</span>
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                <Coffee size={14} />
+                <span>Giao tiếp tự nhiên (Casual English)</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => speak(result.casualEnglish)}
+                  className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-100 text-slate-600 hover:bg-amber-50 hover:text-amber-600 dark:bg-slate-800 dark:text-slate-300 transition"
+                  title="Nghe phát âm"
+                >
+                  <Volume2 size={14} />
+                </button>
+                <button
+                  onClick={() => copyText(result.casualEnglish, 'cas')}
+                  className="flex h-7 items-center gap-1 rounded-lg bg-slate-100 px-2 text-[11px] font-semibold text-slate-600 hover:bg-amber-50 hover:text-amber-600 dark:bg-slate-800 dark:text-slate-300 transition"
+                  title="Sao chép"
+                >
+                  {copiedKey === 'cas' ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}
+                  <span>{copiedKey === 'cas' ? 'Đã chép' : 'Chép'}</span>
+                </button>
+              </div>
             </div>
             <div className="text-sm sm:text-base font-semibold text-slate-800 dark:text-slate-100 leading-relaxed">
               {result.casualEnglish}

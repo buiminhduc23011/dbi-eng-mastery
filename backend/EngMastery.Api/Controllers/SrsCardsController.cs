@@ -20,18 +20,33 @@ public class SrsController : ControllerBase
         _logs = logs;
     }
 
-    /// <summary>Review queue: mistake-prone cards first (even if not strictly due yet), then overdue cards.
-    /// The shortlist is shuffled so the session order is random instead of insertion order.</summary>
+    /// <summary>Review queue: strictly prioritize mistake-prone cards (MistakeCount &gt; 0) until all are cleared,
+    /// before serving regular due/new cards.</summary>
     [HttpGet("due")]
     public async Task<ActionResult<List<CardDto>>> Due([FromQuery] int take = 50, [FromQuery] string? category = null)
     {
-        var now = DateTime.UtcNow;
-        var q = _db.VocabCards.Where(c => c.NextReviewDate <= now || c.MistakeCount > 0);
-        if (!string.IsNullOrWhiteSpace(category)) q = q.Where(c => c.Category == category);
-        var cards = await q
+        int limit = Math.Clamp(take, 1, 200);
+        var mistakeQuery = _db.VocabCards.Where(c => c.MistakeCount > 0);
+        if (!string.IsNullOrWhiteSpace(category)) mistakeQuery = mistakeQuery.Where(c => c.Category == category);
+
+        var mistakeCards = await mistakeQuery
             .OrderByDescending(c => c.MistakeCount)
             .ThenBy(c => c.NextReviewDate)
-            .Take(Math.Clamp(take, 1, 200))
+            .Take(limit)
+            .ToListAsync();
+
+        if (mistakeCards.Count > 0)
+        {
+            Shuffle(mistakeCards);
+            return mistakeCards.Select(DtoMapper.ToDto).ToList();
+        }
+
+        var now = DateTime.UtcNow;
+        var q = _db.VocabCards.Where(c => c.NextReviewDate <= now);
+        if (!string.IsNullOrWhiteSpace(category)) q = q.Where(c => c.Category == category);
+        var cards = await q
+            .OrderBy(c => c.NextReviewDate)
+            .Take(limit)
             .ToListAsync();
         Shuffle(cards);
         return cards.Select(DtoMapper.ToDto).ToList();

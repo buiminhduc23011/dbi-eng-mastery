@@ -33,11 +33,22 @@ public class DrillsController : ControllerBase
     [HttpGet("due")]
     public async Task<ActionResult<List<DrillDto>>> Due([FromQuery] int take = 20)
     {
+        int limit = Math.Clamp(take, 1, 100);
+        // Strictly prioritize practiced drills with low scores (< 80) until mastered.
+        var weakDrills = await _db.SentenceDrills
+            .Where(d => d.PracticeCount > 0 && d.LastScore < 80)
+            .OrderBy(d => d.LastScore)
+            .ThenByDescending(d => d.PracticeCount)
+            .Take(limit)
+            .ToListAsync();
+        if (weakDrills.Count > 0)
+            return weakDrills.Select(DtoMapper.ToDto).ToList();
+
         var now = DateTime.UtcNow;
         var drills = await _db.SentenceDrills
             .Where(d => d.NextReviewDate <= now)
             .OrderBy(d => d.NextReviewDate)
-            .Take(Math.Clamp(take, 1, 100))
+            .Take(limit)
             .ToListAsync();
         return drills.Select(DtoMapper.ToDto).ToList();
     }
@@ -196,27 +207,39 @@ public class TypingController : ControllerBase
 
     /// <summary>
     /// Pick a card for typing practice:
+    /// Priority 0 (Strict): Cards with MistakeCount &gt; 0 MUST be cleared first before any due/new cards.
     /// Priority 1: Cards currently due based on exponential intervals.
-    /// Priority 2: When all due cards are done, rotate cards that had mistakes (MistakeCount > 0) so user can re-practice.
-    /// Priority 3: If all correct, rotate random learned cards for unlimited practice without blocking.
-    /// mode=mistakes: only cards typed wrong and never typed correctly in a row
-    /// (MistakeCount &gt; 0 and ConsecutiveTypingPasses == 0) for focused review.
+    /// Priority 2: If all correct, rotate random learned cards for unlimited practice without blocking.
     /// </summary>
     [HttpGet("next")]
     public async Task<ActionResult<CardDto>> Next([FromQuery] string? category = null, [FromQuery] string? mode = null)
     {
         var today = StudyLogService.TodayUtc();
-        var q = _db.VocabCards.Where(c => c.Status == CardStatus.Learning || c.Status == CardStatus.Review || c.Status == CardStatus.Mastered);
+        var q = _db.VocabCards.Where(c =>
+            c.MistakeCount > 0 || c.Status == CardStatus.Learning || c.Status == CardStatus.Review || c.Status == CardStatus.Mastered);
         if (!string.IsNullOrWhiteSpace(category)) q = q.Where(c => c.Category == category);
         if (string.Equals(mode, "mistakes", StringComparison.OrdinalIgnoreCase))
-            q = q.Where(c => c.MistakeCount > 0 && c.ConsecutiveTypingPasses == 0);
+            q = q.Where(c => c.MistakeCount > 0);
 
         var allCards = await q.ToListAsync();
         if (allCards.Count == 0)
         {
             if (string.Equals(mode, "mistakes", StringComparison.OrdinalIgnoreCase))
-                return NotFound(new { error = "Chưa có từ gõ sai nào cần ôn (từ đã gõ sai mà chuỗi đúng đang = 0). Hãy luyện gõ thường, gõ sai vài từ rồi quay lại đây ôn nhé!" });
+                return NotFound(new { error = "Không còn từ gõ sai nào cần ôn! Tuyệt vời!" });
             return NotFound(new { error = "Chưa có thẻ từ vựng nào trong danh sách học." });
+        }
+
+        // Priority 0: Always force mistake cards until MistakeCount == 0
+        var mistakeCards = allCards
+            .Where(c => c.MistakeCount > 0)
+            .OrderByDescending(c => c.MistakeCount)
+            .ThenBy(c => c.ConsecutiveTypingPasses)
+            .ToList();
+        if (mistakeCards.Count > 0)
+        {
+            var topMistakes = mistakeCards.Take(Math.Min(5, mistakeCards.Count)).ToList();
+            var card = topMistakes[Random.Shared.Next(topMistakes.Count)];
+            return DtoMapper.ToDto(card);
         }
 
         // Priority 1: Due cards (never typed or interval elapsed)
@@ -231,16 +254,7 @@ public class TypingController : ControllerBase
             return DtoMapper.ToDto(card);
         }
 
-        // Priority 2: Rotate words that had mistakes so user can practice difficult words
-        var mistakeCards = allCards.Where(c => c.MistakeCount > 0).OrderByDescending(c => c.MistakeCount).ToList();
-        if (mistakeCards.Count > 0)
-        {
-            var topMistakes = mistakeCards.Take(15).ToList();
-            var card = topMistakes[Random.Shared.Next(topMistakes.Count)];
-            return DtoMapper.ToDto(card);
-        }
-
-        // Priority 3: All correct -> rotate through all cards for free practice
+        // Priority 2: All correct -> rotate through all cards for free practice
         var pool = allCards.Where(c => c.LastTypingPassDate != today).ToList();
         if (pool.Count == 0) pool = allCards;
 
@@ -248,13 +262,11 @@ public class TypingController : ControllerBase
         return DtoMapper.ToDto(randomCard);
     }
 
-    /// <summary>Count of mistake-only cards (typed wrong, current streak = 0).</summary>
+    /// <summary>Count of mistake-only cards (MistakeCount &gt; 0).</summary>
     [HttpGet("mistakes/count")]
     public async Task<ActionResult<object>> MistakesCount([FromQuery] string? category = null)
     {
-        var q = _db.VocabCards.Where(c =>
-            (c.Status == CardStatus.Learning || c.Status == CardStatus.Review || c.Status == CardStatus.Mastered)
-            && c.MistakeCount > 0 && c.ConsecutiveTypingPasses == 0);
+        var q = _db.VocabCards.Where(c => c.MistakeCount > 0);
         if (!string.IsNullOrWhiteSpace(category)) q = q.Where(c => c.Category == category);
         return Ok(new { count = await q.CountAsync() });
     }

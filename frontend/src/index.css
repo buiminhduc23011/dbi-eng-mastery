@@ -18,11 +18,34 @@
   input, select, textarea {
     font-size: 16px;
   }
+
+  button:focus-visible,
+  a:focus-visible,
+  select:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.5);
+  }
+}
+
+@layer components {
+  .em-card {
+    @apply rounded-2xl border border-slate-200/80 bg-white shadow-card-light dark:border-slate-800/80 dark:bg-[#111827];
+  }
+
+  .em-card-interactive {
+    @apply em-card transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md dark:hover:border-slate-700;
+  }
+
+  .em-kbd {
+    @apply inline-flex items-center justify-center rounded-md border border-slate-300/70 bg-slate-900/5 px-1.5 py-0.5 font-mono text-[10px] font-bold leading-none dark:border-white/15 dark:bg-white/10;
+  }
 }
 
 /* 3D Flip Card */
 .perspective-1000 {
-  perspective: 1000px;
+  perspective: 1200px;
 }
 .preserve-3d {
   transform-style: preserve-3d;
@@ -53,11 +76,11 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.4);
+  background: rgba(148, 163, 184, 0.35);
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.7);
+  background: rgba(148, 163, 184, 0.65);
 }
 
 /* Mobile safe area padding utilities */

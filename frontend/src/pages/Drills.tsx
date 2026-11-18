@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, scoreColor, type DrillResult, type SentenceDrill, type AiSentenceResult } from '../lib/api';
-import { listenOnce, speak, speechSupported } from '../lib/speech';
+import { listenOnce, speak, stopSpeak, speechSupported } from '../lib/speech';
 import {
   Volume2,
+  VolumeX,
   Mic,
   Sparkles,
   Loader2,
@@ -26,7 +27,19 @@ export default function Drills({ onDrillComplete }: Props) {
   const [listening, setListening] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [autoSpeak, setAutoSpeak] = useState(() => localStorage.getItem('drills:autoSpeak') !== '0');
   const nextBtnRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => () => stopSpeak(), []);
+
+  const toggleAutoSpeak = () => {
+    setAutoSpeak((v) => {
+      const next = !v;
+      localStorage.setItem('drills:autoSpeak', next ? '1' : '0');
+      if (!next) stopSpeak();
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (result) nextBtnRef.current?.focus();
@@ -64,6 +77,9 @@ export default function Drills({ onDrillComplete }: Props) {
       const r = await api.post<DrillResult>(`/drills/${current.id}/submit`, { userInput: input });
       setResult(r.data);
       setAi(null);
+      if (autoSpeak) {
+        speak(r.data.targetEn);
+      }
       onDrillComplete?.();
     } catch {
       setError('Không chấm điểm được — vui lòng thử lại.');
@@ -113,6 +129,18 @@ export default function Drills({ onDrillComplete }: Props) {
           <BookOpen size={20} className="text-indigo-600 dark:text-indigo-400" />
           Luyện phản xạ câu
         </h2>
+        <button
+          onClick={toggleAutoSpeak}
+          title={autoSpeak ? 'Tắt tự động đọc khi chấm điểm' : 'Bật tự động đọc khi chấm điểm'}
+          className={`flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-[11px] font-bold shadow-sm transition active:scale-95 ${
+            autoSpeak
+              ? 'border-indigo-600 bg-indigo-600 text-white shadow-indigo-600/25'
+              : 'border-slate-200/80 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-800 dark:bg-[#111827] dark:text-slate-300'
+          }`}
+        >
+          {autoSpeak ? <Volume2 size={14} /> : <VolumeX size={14} />}
+          <span className="hidden sm:inline">{autoSpeak ? 'Tự đọc: Bật' : 'Tự đọc: Tắt'}</span>
+        </button>
       </div>
 
       {/* Due Drills Horizontal Chip Slider */}
@@ -120,17 +148,21 @@ export default function Drills({ onDrillComplete }: Props) {
         <span className="shrink-0 text-xs font-semibold text-slate-400 mr-1">Danh sách câu:</span>
         {drills.map((d, i) => {
           const isSelected = current?.id === d.id;
+          const dotColor =
+            d.lastScore >= 80 ? 'bg-emerald-400' : d.lastScore > 0 ? 'bg-amber-400' : 'bg-slate-300 dark:bg-slate-600';
           return (
             <button
               key={d.id}
               onClick={() => pick(d)}
-              className={`shrink-0 rounded-xl px-3 py-1.5 text-xs font-bold transition-all active:scale-95 ${
+              className={`shrink-0 flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold transition-all active:scale-95 ${
                 isSelected
                   ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/30'
                   : 'border border-slate-200/80 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-800 dark:bg-[#111827] dark:text-slate-300'
               }`}
             >
-              #{i + 1} {d.lastScore > 0 && <span className="opacity-75">({d.lastScore}đ)</span>}
+              <span className={`h-1.5 w-1.5 rounded-full ${isSelected ? 'bg-white' : dotColor}`} />
+              <span>#{i + 1}</span>
+              {d.lastScore > 0 && <span className="opacity-75 font-mono">({d.lastScore}đ)</span>}
             </button>
           );
         })}
@@ -243,7 +275,7 @@ export default function Drills({ onDrillComplete }: Props) {
 
           {/* Grading Result Breakdown */}
           {result && (
-            <div className="mt-5 space-y-4 rounded-2xl border border-slate-200/80 bg-slate-50/80 p-4 sm:p-5 dark:border-slate-800 dark:bg-slate-800/40">
+            <div className="mt-5 space-y-4 rounded-2xl border border-slate-200/80 bg-slate-50/80 p-4 sm:p-5 dark:border-slate-800 dark:bg-slate-800/40 animate-scale-in">
               {/* Score Header */}
               <div className="flex items-center gap-3.5">
                 <div
@@ -339,17 +371,35 @@ export default function Drills({ onDrillComplete }: Props) {
                     </div>
                   )}
 
-                  <div className="grid gap-2 sm:grid-cols-2 pt-1 border-t border-slate-100 dark:border-slate-800 text-xs">
-                    <div className="rounded-xl bg-slate-50 p-2.5 dark:bg-slate-800/50">
-                      <div className="font-bold text-slate-700 dark:text-slate-300 mb-1">💼 Professional (Công sở)</div>
+                  <div className="grid gap-2.5 sm:grid-cols-2 pt-1 border-t border-slate-100 dark:border-slate-800 text-xs">
+                    <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50 space-y-1.5">
+                      <div className="font-bold text-slate-700 dark:text-slate-300">💼 Professional (Công sở)</div>
                       {ai.professionalVersions.map((v) => (
-                        <div key={v} className="text-slate-600 dark:text-slate-400">• {v}</div>
+                        <div key={v} className="flex items-start justify-between gap-2 text-slate-600 dark:text-slate-400">
+                          <span>• {v}</span>
+                          <button
+                            onClick={() => speak(v)}
+                            className="shrink-0 rounded-md p-1 text-slate-400 hover:bg-white hover:text-indigo-600 dark:hover:bg-slate-700 dark:hover:text-indigo-400 transition"
+                            title="Nghe câu này"
+                          >
+                            <Volume2 size={13} />
+                          </button>
+                        </div>
                       ))}
                     </div>
-                    <div className="rounded-xl bg-slate-50 p-2.5 dark:bg-slate-800/50">
-                      <div className="font-bold text-slate-700 dark:text-slate-300 mb-1">☕ Casual (Giao tiếp thường)</div>
+                    <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50 space-y-1.5">
+                      <div className="font-bold text-slate-700 dark:text-slate-300">☕ Casual (Giao tiếp thường)</div>
                       {ai.casualVersions.map((v) => (
-                        <div key={v} className="text-slate-600 dark:text-slate-400">• {v}</div>
+                        <div key={v} className="flex items-start justify-between gap-2 text-slate-600 dark:text-slate-400">
+                          <span>• {v}</span>
+                          <button
+                            onClick={() => speak(v)}
+                            className="shrink-0 rounded-md p-1 text-slate-400 hover:bg-white hover:text-indigo-600 dark:hover:bg-slate-700 dark:hover:text-indigo-400 transition"
+                            title="Nghe câu này"
+                          >
+                            <Volume2 size={13} />
+                          </button>
+                        </div>
                       ))}
                     </div>
                   </div>

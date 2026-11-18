@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, type VocabCard } from '../lib/api';
-import { speak } from '../lib/speech';
-import { Volume2, ArrowRight, Keyboard, Trophy, CheckCircle2, XCircle } from 'lucide-react';
+import { speak, stopSpeak } from '../lib/speech';
+import { Volume2, VolumeX, ArrowRight, Keyboard, Trophy, CheckCircle2, XCircle } from 'lucide-react';
 
 interface TypingResult {
   passed: boolean;
@@ -32,8 +32,20 @@ export default function Typing({ onWordMastered }: Props) {
   const [empty, setEmpty] = useState('');
   const [loading, setLoading] = useState(false);
   const [mistakesCount, setMistakesCount] = useState(0);
+  const [autoSpeak, setAutoSpeak] = useState(() => localStorage.getItem('typing:autoSpeak') !== '0');
   const nextBtnRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => () => stopSpeak(), []);
+
+  const toggleAutoSpeak = () => {
+    setAutoSpeak((v) => {
+      const next = !v;
+      localStorage.setItem('typing:autoSpeak', next ? '1' : '0');
+      if (!next) stopSpeak();
+      return next;
+    });
+  };
 
   // Auto focus next button on result, input otherwise
   useEffect(() => {
@@ -86,6 +98,9 @@ export default function Typing({ onWordMastered }: Props) {
     try {
       const r = await api.post<TypingResult>(`/typing/${card.id}/submit`, { userInput: input });
       setResult(r.data);
+      if (autoSpeak) {
+        speak(r.data.correctTerm);
+      }
       if (r.data.mastered) {
         onWordMastered?.();
       }
@@ -172,33 +187,62 @@ export default function Typing({ onWordMastered }: Props) {
             ))}
           </select>
 
-          <select
-            value={mode}
-            onChange={(e) => {
-              const m = e.target.value as TypingMode;
-              setMode(m);
-              void loadNext(category, m);
-            }}
-            title="Chế độ ôn"
-            className={`rounded-2xl border px-3.5 py-2 text-xs font-bold shadow-sm ${
-              mode === 'mistakes'
-                ? 'border-rose-300 bg-rose-50 text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-300'
-                : 'border-slate-200/80 bg-white text-slate-700 dark:border-slate-800 dark:bg-[#111827] dark:text-slate-300'
-            }`}
-          >
-            <option value="all">Ngẫu nhiên</option>
-            <option value="mistakes">
-              Ôn từ gõ sai {mistakesCount > 0 ? `(${mistakesCount})` : ''} — chuỗi đúng = 0
-            </option>
-          </select>
+          <div className="flex rounded-xl bg-slate-200/80 p-0.5 dark:bg-slate-800/80 shadow-inner">
+            <button
+              onClick={() => {
+                setMode('all');
+                void loadNext(category, 'all');
+              }}
+              className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-all ${
+                mode === 'all'
+                  ? 'bg-white text-indigo-600 shadow-sm dark:bg-[#111827] dark:text-indigo-400'
+                  : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
+              }`}
+            >
+              Ngẫu nhiên
+            </button>
+            <button
+              onClick={() => {
+                setMode('mistakes');
+                void loadNext(category, 'mistakes');
+              }}
+              className={`flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-bold transition-all ${
+                mode === 'mistakes'
+                  ? 'bg-white text-rose-600 shadow-sm dark:bg-[#111827] dark:text-rose-400'
+                  : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
+              }`}
+            >
+              <span>Ôn từ gõ sai</span>
+              {mistakesCount > 0 && (
+                <span className="rounded-full bg-rose-100 px-1.5 py-0.2 text-[10px] font-extrabold text-rose-700 dark:bg-rose-950 dark:text-rose-300">
+                  {mistakesCount}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
 
-        <button
-          onClick={() => loadNext(category, mode)}
-          className="rounded-2xl border border-slate-200/80 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-800 dark:bg-[#111827] dark:text-slate-300"
-        >
-          Từ khác →
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={toggleAutoSpeak}
+            title={autoSpeak ? 'Tắt tự động đọc khi có kết quả' : 'Bật tự động đọc khi có kết quả'}
+            className={`flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-bold shadow-sm transition active:scale-95 ${
+              autoSpeak
+                ? 'border-indigo-600 bg-indigo-600 text-white shadow-indigo-600/25'
+                : 'border-slate-200/80 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-800 dark:bg-[#111827] dark:text-slate-300'
+            }`}
+          >
+            {autoSpeak ? <Volume2 size={14} /> : <VolumeX size={14} />}
+            <span className="hidden sm:inline">{autoSpeak ? 'Tự đọc: Bật' : 'Tự đọc: Tắt'}</span>
+          </button>
+
+          <button
+            onClick={() => loadNext(category, mode)}
+            className="rounded-xl border border-slate-200/80 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-800 dark:bg-[#111827] dark:text-slate-300"
+          >
+            Từ khác →
+          </button>
+        </div>
       </div>
 
       {/* Loading state */}
@@ -290,7 +334,7 @@ export default function Typing({ onWordMastered }: Props) {
           ) : (
             /* Result Panel */
             <div
-              className={`mt-6 rounded-2xl p-4 sm:p-5 ${
+              className={`mt-6 rounded-2xl p-4 sm:p-5 animate-scale-in ${
                 result.passed
                   ? 'border border-emerald-200 bg-emerald-50/80 dark:border-emerald-900/60 dark:bg-emerald-950/40'
                   : 'border border-rose-200 bg-rose-50/80 dark:border-rose-900/60 dark:bg-rose-950/40'
@@ -362,8 +406,10 @@ export default function Typing({ onWordMastered }: Props) {
                   <ArrowRight size={15} />
                 </button>
               </div>
-              <div className="mt-2 text-center text-[11px] text-slate-400">
-                Phím tắt: R để nghe · Enter để qua từ tiếp
+              <div className="mt-2 flex items-center justify-center gap-3 text-[11px] text-slate-400">
+                <span className="flex items-center gap-1"><kbd className="em-kbd">R</kbd> Nghe lại</span>
+                <span>·</span>
+                <span className="flex items-center gap-1"><kbd className="em-kbd">Enter</kbd> Từ tiếp theo</span>
               </div>
             </div>
           )}

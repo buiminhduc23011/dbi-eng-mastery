@@ -6,10 +6,12 @@ import { Volume2, Mic, Turtle, ArrowLeft, ArrowRight, Award, Headphones } from '
 interface Item {
   text: string;
   sub: string;
+  isMistake?: boolean;
 }
 
 export default function Shadowing() {
   const [items, setItems] = useState<Item[]>([]);
+  const [mistakeOnlyCount, setMistakeOnlyCount] = useState(0);
   const [index, setIndex] = useState(0);
   const [marks, setMarks] = useState<WordMark[]>([]);
   const [transcript, setTranscript] = useState('');
@@ -20,15 +22,29 @@ export default function Shadowing() {
 
   useEffect(() => {
     Promise.all([
-      api.get<VocabCard[]>('/cards', { params: { take: 30 } }),
-      api.get<SentenceDrill[]>('/drills', { params: { take: 30 } }),
+      api.get<VocabCard[]>('/cards', { params: { take: 50 } }),
+      api.get<SentenceDrill[]>('/drills', { params: { take: 50 } }),
     ])
       .then(([c, d]) => {
-        const list: Item[] = [
-          ...c.data.filter((x) => x.exampleSentence).map((x) => ({ text: x.exampleSentence, sub: `${x.term} — ${x.meaningVi}` })),
-          ...d.data.map((x) => ({ text: x.targetEn, sub: x.promptVi })),
-        ];
-        setItems(list);
+        const mistakeCards = c.data
+          .filter((x) => x.exampleSentence && x.mistakeCount > 0)
+          .map((x) => ({ text: x.exampleSentence, sub: `${x.term} — ${x.meaningVi} (×${x.mistakeCount} lỗi)`, isMistake: true }));
+        const weakDrills = d.data
+          .filter((x) => x.practiceCount > 0 && x.lastScore < 80)
+          .map((x) => ({ text: x.targetEn, sub: `${x.promptVi} (${x.lastScore}đ)`, isMistake: true }));
+
+        const mistakeItems = [...mistakeCards, ...weakDrills];
+        if (mistakeItems.length > 0) {
+          setMistakeOnlyCount(mistakeItems.length);
+          setItems(mistakeItems);
+        } else {
+          const list: Item[] = [
+            ...c.data.filter((x) => x.exampleSentence).map((x) => ({ text: x.exampleSentence, sub: `${x.term} — ${x.meaningVi}` })),
+            ...d.data.map((x) => ({ text: x.targetEn, sub: x.promptVi })),
+          ];
+          setMistakeOnlyCount(0);
+          setItems(list);
+        }
       })
       .catch(() => setError('Không thể kết nối đến máy chủ backend.'))
       .finally(() => setLoading(false));
@@ -73,6 +89,11 @@ export default function Shadowing() {
           <Headphones size={20} className="text-indigo-600 dark:text-indigo-400" />
           Luyện phát âm & Shadowing
         </h2>
+        {mistakeOnlyCount > 0 && (
+          <span className="rounded-full bg-rose-100 px-2.5 py-1 text-[11px] font-bold text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">
+            Ưu tiên {mistakeOnlyCount} câu từ lỗi
+          </span>
+        )}
       </div>
 
       {error && (
