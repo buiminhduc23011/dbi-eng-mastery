@@ -153,7 +153,7 @@ export default function Typing({ onWordMastered }: Props) {
   );
 
   return (
-    <div className="mx-auto max-w-2xl space-y-4">
+    <div className="mx-auto max-w-2xl landscape-sm:max-w-4xl space-y-4 landscape-sm:space-y-2">
       {/* Header Info */}
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-lg font-bold flex items-center gap-2">
@@ -277,7 +277,7 @@ export default function Typing({ onWordMastered }: Props) {
 
       {/* Word Card */}
       {card && !empty && !loading && (
-        <div className="rounded-3xl border border-slate-200/80 bg-white p-5 sm:p-7 shadow-md dark:border-slate-800/80 dark:bg-[#111827]">
+        <div className="rounded-3xl border border-slate-200/80 bg-white p-5 sm:p-7 landscape-sm:p-4 shadow-md dark:border-slate-800/80 dark:bg-[#111827]">
           {/* Card Header & Streak Progress */}
           <div className="flex items-center justify-between">
             <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700 dark:bg-indigo-950/80 dark:text-indigo-300">
@@ -290,8 +290,8 @@ export default function Typing({ onWordMastered }: Props) {
           </div>
 
           {/* Word Prompt */}
-          <div className="mt-5 text-center">
-            <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white">
+          <div className="mt-5 landscape-sm:mt-2 text-center">
+            <div className="text-2xl sm:text-3xl landscape-sm:text-xl font-extrabold text-slate-900 dark:text-white">
               {result && !result.passed ? result.meaningVi : card.meaningVi}
             </div>
 
@@ -311,7 +311,7 @@ export default function Typing({ onWordMastered }: Props) {
 
           {/* Input & Check */}
           {!result ? (
-            <div className="mt-6 space-y-3">
+            <div className="mt-6 landscape-sm:mt-3 space-y-3 landscape-sm:space-y-2">
               <input
                 ref={inputRef}
                 value={input}
@@ -321,12 +321,12 @@ export default function Typing({ onWordMastered }: Props) {
                 }}
                 autoFocus
                 placeholder="Gõ từ hoặc cụm tiếng Anh tương ứng…"
-                className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3.5 text-center text-lg sm:text-xl font-bold shadow-sm focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900"
+                className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3.5 landscape-sm:py-2 text-center text-lg sm:text-xl landscape-sm:text-base font-bold shadow-sm focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900"
               />
               <button
                 onClick={check}
                 disabled={!input.trim()}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-indigo-600 py-3.5 text-sm font-bold text-white shadow-md shadow-indigo-600/25 transition hover:bg-indigo-700 active:scale-98 disabled:opacity-40"
+                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-indigo-600 py-3.5 landscape-sm:py-2 text-sm font-bold text-white shadow-md shadow-indigo-600/25 transition hover:bg-indigo-700 active:scale-98 disabled:opacity-40"
               >
                 <span>Chấm điểm (Enter)</span>
               </button>
@@ -334,7 +334,7 @@ export default function Typing({ onWordMastered }: Props) {
           ) : (
             /* Result Panel */
             <div
-              className={`mt-6 rounded-2xl p-4 sm:p-5 animate-scale-in ${
+              className={`mt-6 landscape-sm:mt-3 rounded-2xl p-4 sm:p-5 landscape-sm:p-3 animate-scale-in ${
                 result.passed
                   ? 'border border-emerald-200 bg-emerald-50/80 dark:border-emerald-900/60 dark:bg-emerald-950/40'
                   : 'border border-rose-200 bg-rose-50/80 dark:border-rose-900/60 dark:bg-rose-950/40'

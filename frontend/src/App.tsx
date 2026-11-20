@@ -115,29 +115,29 @@ export default function App() {
     <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900 transition-colors duration-200 dark:bg-[#0b0f19] dark:text-slate-100">
       {/* Top Header */}
       <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/80 backdrop-blur-md dark:border-slate-800/80 dark:bg-[#0b0f19]/80">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-3 py-2 sm:px-4 sm:py-2.5">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-safe py-2 sm:px-4 sm:py-2.5 landscape-sm:py-1.5">
           {/* Logo & Brand */}
           <div
-            className="flex items-center gap-2.5 cursor-pointer select-none group"
+            className="flex items-center gap-2 shrink-0 cursor-pointer select-none group"
             onClick={() => go('dashboard')}
           >
             <img
               src="/dbi-logo.svg"
               alt="DBI"
-              className="h-8 w-8 sm:h-9 sm:w-9 rounded-xl shadow-xs transition-transform group-hover:scale-105"
+              className="h-8 w-8 sm:h-9 sm:w-9 landscape-sm:h-7 landscape-sm:w-7 rounded-xl shadow-xs transition-transform group-hover:scale-105"
             />
             <div>
-              <div className="flex items-center gap-1.5 text-sm sm:text-base font-extrabold tracking-tight">
+              <div className="flex items-center gap-1.5 text-sm sm:text-base landscape-sm:text-sm font-extrabold tracking-tight">
                 EngMastery
               </div>
-              <div className="hidden sm:block text-[10px] font-medium text-slate-500 dark:text-slate-400">
+              <div className="hidden sm:block landscape-sm:hidden text-[10px] font-medium text-slate-500 dark:text-slate-400">
                 English Learning Lab
               </div>
             </div>
           </div>
 
-          {/* Desktop Navigation */}
-          <nav className="hidden items-center gap-0.5 rounded-xl border border-slate-200/70 bg-slate-100/80 p-1 dark:border-slate-800/80 dark:bg-slate-900/90 md:flex">
+          {/* Desktop & Mobile-Landscape Navigation */}
+          <nav className="hidden items-center gap-0.5 rounded-xl border border-slate-200/70 bg-slate-100/80 p-1 dark:border-slate-800/80 dark:bg-slate-900/90 md:flex landscape-sm:flex landscape-sm:overflow-x-auto landscape-sm:no-scrollbar landscape-sm:max-w-[58vw]">
             {ALL_TABS.map((t) => {
               const badge = getBadge(t.badgeKey);
               const active = tab === t.id;
@@ -145,7 +145,7 @@ export default function App() {
                 <button
                   key={t.id}
                   onClick={() => go(t.id)}
-                  className={`relative flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-all duration-150 ${
+                  className={`relative shrink-0 flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 landscape-sm:px-2 landscape-sm:py-1 text-xs font-semibold transition-all duration-150 ${
                     active
                       ? 'bg-white text-indigo-600 shadow-sm dark:bg-slate-800 dark:text-indigo-400'
                       : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100'
@@ -229,7 +229,7 @@ export default function App() {
       </header>
 
       {/* Main Content Area */}
-      <main key={tab} className="mx-auto w-full max-w-6xl flex-1 px-3 py-4 sm:px-4 sm:py-6 pb-24 md:pb-8 animate-fade-in-up">
+      <main key={tab} className="mx-auto w-full max-w-6xl flex-1 px-safe py-4 sm:px-4 sm:py-6 pb-24 md:pb-8 landscape-sm:py-2.5 landscape-sm:pb-4 animate-fade-in-up">
         {tab === 'dashboard' && <DashboardPage go={go} onRefresh={refreshDashboard} onStudyLeech={goReviewLeeches} />}
         {tab === 'review' && <Review key={reviewKey} deck={reviewDeck} startId={reviewStartId} reloadKey={reviewKey} onSessionComplete={refreshDashboard} />}
         {tab === 'typing' && <Typing onWordMastered={refreshDashboard} />}
@@ -248,8 +248,8 @@ export default function App() {
         </div>
       </footer>
 
-      {/* Mobile Bottom Navigation Bar (Dock) */}
-      <nav className="fixed bottom-0 inset-x-0 z-40 block md:hidden border-t border-slate-200/80 bg-white/90 backdrop-blur-xl dark:border-slate-800/80 dark:bg-[#0b0f19]/95 pb-safe">
+      {/* Mobile Bottom Navigation Bar (Dock — hidden in landscape to save vertical space) */}
+      <nav className="fixed bottom-0 inset-x-0 z-40 block md:hidden landscape-sm:hidden border-t border-slate-200/80 bg-white/90 backdrop-blur-xl dark:border-slate-800/80 dark:bg-[#0b0f19]/95 pb-safe">
         <div className="grid grid-cols-5 h-14 items-center px-1">
           {PRIMARY_TABS.map((t) => {
             const active = tab === t.id;

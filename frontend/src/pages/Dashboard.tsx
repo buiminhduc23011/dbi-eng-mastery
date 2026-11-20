@@ -288,7 +288,7 @@ export default function DashboardPage({ go, onRefresh, onStudyLeech }: Props) {
       </div>
 
       {/* 2. Key Metrics Bento Strip */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4 landscape-sm:grid-cols-4">
         {stats.map((s) => (
           <div
             key={s.label}

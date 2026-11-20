@@ -289,7 +289,7 @@ export default function Review({ onSessionComplete, deck = 'due', startId = null
   const progress = queue.length > 0 ? Math.round(((index + 1) / queue.length) * 100) : 0;
 
   return (
-    <div className="mx-auto max-w-2xl space-y-3.5 sm:space-y-4">
+    <div className="mx-auto max-w-2xl landscape-sm:max-w-4xl space-y-3.5 sm:space-y-4 landscape-sm:space-y-2">
       {/* Top Controls Bar */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         {/* Mode Segmented Switch */}
@@ -472,12 +472,12 @@ export default function Review({ onSessionComplete, deck = 'due', startId = null
             <div className="perspective-1000 select-none">
               <div
                 onClick={() => setFlipped((f) => !f)}
-                className={`preserve-3d relative min-h-[350px] sm:min-h-[380px] cursor-pointer rounded-3xl border border-slate-200/80 bg-white p-6 shadow-md transition-all duration-500 hover:shadow-lg dark:border-slate-800/80 dark:bg-[#111827] ${
+                className={`preserve-3d relative min-h-[350px] sm:min-h-[380px] landscape-sm:min-h-[185px] cursor-pointer rounded-3xl border border-slate-200/80 bg-white p-6 landscape-sm:p-4 shadow-md transition-all duration-500 hover:shadow-lg dark:border-slate-800/80 dark:bg-[#111827] ${
                   flipped ? 'rotate-y-180' : ''
                 }`}
               >
                 {/* Front Side */}
-                <div className="backface-hidden flex min-h-[300px] sm:min-h-[330px] flex-col items-center justify-between text-center">
+                <div className="backface-hidden flex min-h-[300px] sm:min-h-[330px] landscape-sm:min-h-[150px] flex-col items-center justify-between text-center">
                   <div className="flex w-full items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5">
                       <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700 dark:bg-indigo-950/80 dark:text-indigo-300">
@@ -494,26 +494,26 @@ export default function Review({ onSessionComplete, deck = 'due', startId = null
                     </span>
                   </div>
 
-                  <div className="my-auto py-4 space-y-2.5">
-                    <div className="text-3xl sm:text-4xl font-black tracking-tight text-slate-900 dark:text-white">
+                  <div className="my-auto py-4 landscape-sm:py-1 space-y-2.5 landscape-sm:space-y-1">
+                    <div className="text-3xl sm:text-4xl landscape-sm:text-2xl font-black tracking-tight text-slate-900 dark:text-white">
                       {card.term}
                     </div>
                     {card.phonetic && (
-                      <div className="font-mono text-sm text-indigo-600 dark:text-indigo-400">
+                      <div className="font-mono text-sm landscape-sm:text-xs text-indigo-600 dark:text-indigo-400">
                         {card.phonetic}
                       </div>
                     )}
-                    <div className="text-lg sm:text-xl font-medium text-slate-700 dark:text-slate-200 pt-1">
+                    <div className="text-lg sm:text-xl landscape-sm:text-base font-medium text-slate-700 dark:text-slate-200 pt-1 landscape-sm:pt-0">
                       {card.meaningVi}
                     </div>
 
-                    <div className="pt-2">
+                    <div className="pt-2 landscape-sm:pt-1">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           playAudio(card.term);
                         }}
-                        className={`inline-flex items-center gap-1.5 rounded-2xl border border-slate-200 bg-slate-100/80 px-4 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 active:scale-95 dark:border-slate-800 dark:bg-slate-800/80 dark:text-slate-200 ${
+                        className={`inline-flex items-center gap-1.5 rounded-2xl border border-slate-200 bg-slate-100/80 px-4 py-2 landscape-sm:px-3 landscape-sm:py-1 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 active:scale-95 dark:border-slate-800 dark:bg-slate-800/80 dark:text-slate-200 ${
                           isSpeaking ? 'ring-2 ring-indigo-500' : ''
                         }`}
                       >
@@ -524,14 +524,14 @@ export default function Review({ onSessionComplete, deck = 'due', startId = null
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-1.5 text-xs font-medium text-slate-400">
+                  <div className="flex items-center gap-1.5 text-xs landscape-sm:hidden font-medium text-slate-400">
                     <HelpCircle size={14} />
                     <span>Chạm vào thẻ hoặc nhấn Space để xem ví dụ</span>
                   </div>
                 </div>
 
                 {/* Back Side */}
-                <div className="backface-hidden rotate-y-180 absolute inset-0 flex flex-col justify-between rounded-3xl bg-white p-6 shadow-md dark:bg-[#111827]">
+                <div className="backface-hidden rotate-y-180 absolute inset-0 flex flex-col justify-between rounded-3xl bg-white p-6 landscape-sm:p-4 shadow-md dark:bg-[#111827] overflow-y-auto">
                   <div className="flex w-full items-center justify-between">
                     <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-950/80 dark:text-emerald-300">
                       Đáp án & Ví dụ ngữ cảnh
@@ -541,8 +541,8 @@ export default function Review({ onSessionComplete, deck = 'due', startId = null
                     </span>
                   </div>
 
-                  <div className="my-auto py-4 space-y-3.5 text-center">
-                    <div className="text-xl font-extrabold text-slate-900 dark:text-white">
+                  <div className="my-auto py-4 landscape-sm:py-1 space-y-3.5 landscape-sm:space-y-1.5 text-center">
+                    <div className="text-xl landscape-sm:text-lg font-extrabold text-slate-900 dark:text-white">
                       {card.term}
                       {card.phonetic && (
                         <span className="ml-2 font-mono text-xs font-normal text-indigo-600 dark:text-indigo-400">
@@ -552,22 +552,22 @@ export default function Review({ onSessionComplete, deck = 'due', startId = null
                     </div>
 
                     {card.definitionEn && (
-                      <div className="rounded-2xl border border-slate-100 bg-slate-50/90 p-3.5 text-xs sm:text-sm italic text-slate-600 dark:border-slate-800/80 dark:bg-slate-800/40 dark:text-slate-300 leading-relaxed">
+                      <div className="rounded-2xl border border-slate-100 bg-slate-50/90 p-3.5 landscape-sm:p-2 text-xs sm:text-sm landscape-sm:text-xs italic text-slate-600 dark:border-slate-800/80 dark:bg-slate-800/40 dark:text-slate-300 leading-relaxed">
                         &ldquo;{card.definitionEn}&rdquo;
                       </div>
                     )}
 
-                    <div className="text-sm sm:text-base font-medium text-slate-800 dark:text-slate-100 leading-relaxed px-2">
+                    <div className="text-sm sm:text-base landscape-sm:text-sm font-medium text-slate-800 dark:text-slate-100 leading-relaxed px-2">
                       {highlightTermInSentence(card.exampleSentence, card.term)}
                     </div>
 
-                    <div className="pt-1">
+                    <div className="pt-1 landscape-sm:pt-0">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           playAudio(card.exampleSentence || card.term);
                         }}
-                        className="inline-flex items-center gap-1.5 rounded-2xl border border-slate-200 bg-slate-100/80 px-4 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200 active:scale-95 dark:border-slate-800 dark:bg-slate-800/80 dark:text-slate-200"
+                        className="inline-flex items-center gap-1.5 rounded-2xl border border-slate-200 bg-slate-100/80 px-4 py-2 landscape-sm:px-3 landscape-sm:py-1 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200 active:scale-95 dark:border-slate-800 dark:bg-slate-800/80 dark:text-slate-200"
                       >
                         <Volume2 size={16} />
                         <span>Nghe cả câu</span>
@@ -576,7 +576,7 @@ export default function Review({ onSessionComplete, deck = 'due', startId = null
                     </div>
                   </div>
 
-                  <div className="text-center text-[11px] font-medium text-slate-400">
+                  <div className="text-center text-[11px] font-medium text-slate-400 landscape-sm:hidden">
                     Chạm để lật lại · Chọn mức độ nhớ bên dưới
                   </div>
                 </div>
@@ -682,7 +682,7 @@ export default function Review({ onSessionComplete, deck = 'due', startId = null
             /* Tap to reveal CTA for easy one-hand thumb use on phone */
             <button
               onClick={() => setFlipped(true)}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-indigo-600 py-3.5 text-sm font-bold text-white shadow-lg shadow-indigo-600/30 transition-all hover:bg-indigo-700 active:scale-98"
+              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-indigo-600 py-3.5 landscape-sm:py-2 text-sm font-bold text-white shadow-lg shadow-indigo-600/30 transition-all hover:bg-indigo-700 active:scale-98"
             >
               <span>Lật xem đáp án (Space)</span>
               <ArrowRight size={16} />
@@ -697,14 +697,14 @@ export default function Review({ onSessionComplete, deck = 'due', startId = null
                   <button
                     key={q}
                     onClick={() => rate(q)}
-                    className={`group relative flex flex-col items-center justify-center rounded-2xl py-3 px-1.5 font-bold shadow-sm transition-all active:scale-95 ${
+                    className={`group relative flex flex-col items-center justify-center rounded-2xl py-3 landscape-sm:py-1.5 px-1.5 font-bold shadow-sm transition-all active:scale-95 ${
                       cfg.color
                     } ${isSuggested ? 'ring-2 ring-offset-2 ring-indigo-500 dark:ring-offset-[#0b0f19]' : ''}`}
                   >
                     <span className="em-kbd absolute right-1.5 top-1.5 hidden sm:inline-flex opacity-70">{q}</span>
-                    <cfg.icon size={18} className="mb-1 transition-transform group-hover:scale-110" />
+                    <cfg.icon size={18} className="mb-1 landscape-sm:hidden transition-transform group-hover:scale-110" />
                     <span className="text-xs sm:text-sm">{cfg.label}</span>
-                    <span className="text-[10px] font-medium opacity-80 hidden sm:inline-block">{cfg.sub}</span>
+                    <span className="text-[10px] font-medium opacity-80 hidden sm:inline-block landscape-sm:hidden">{cfg.sub}</span>
                   </button>
                 );
               })}

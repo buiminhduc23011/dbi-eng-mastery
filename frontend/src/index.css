@@ -90,3 +90,7 @@
 .pt-safe {
   padding-top: env(safe-area-inset-top, 16px);
 }
+.px-safe {
+  padding-left: max(12px, env(safe-area-inset-left, 12px));
+  padding-right: max(12px, env(safe-area-inset-right, 12px));
+}

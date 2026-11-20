@@ -82,7 +82,7 @@ export default function Shadowing() {
   const pct = marks.length ? Math.round((hitCount / marks.length) * 100) : 0;
 
   return (
-    <div className="mx-auto max-w-2xl space-y-4">
+    <div className="mx-auto max-w-2xl landscape-sm:max-w-5xl space-y-4 landscape-sm:space-y-2.5">
       {/* Header */}
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-lg font-bold flex items-center gap-2">
@@ -110,14 +110,14 @@ export default function Shadowing() {
       )}
 
       {item && (
-        <>
+        <div className="space-y-4 landscape-sm:space-y-0 landscape-sm:grid landscape-sm:grid-cols-2 landscape-sm:gap-3 landscape-sm:items-start">
           {/* Sentence Display Card */}
-          <div className="rounded-3xl border border-slate-200/80 bg-white p-6 sm:p-7 text-center shadow-md dark:border-slate-800/80 dark:bg-[#111827]">
+          <div className="rounded-3xl border border-slate-200/80 bg-white p-6 sm:p-7 landscape-sm:p-4 text-center shadow-md dark:border-slate-800/80 dark:bg-[#111827]">
             <span className="inline-block rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300 max-w-full truncate">
               {item.sub}
             </span>
 
-            <div className="my-5 text-xl sm:text-2xl font-extrabold leading-relaxed text-slate-900 dark:text-white px-2">
+            <div className="my-5 landscape-sm:my-2.5 text-xl sm:text-2xl landscape-sm:text-lg font-extrabold leading-relaxed text-slate-900 dark:text-white px-2">
               &ldquo;{item.text}&rdquo;
             </div>
 
@@ -162,7 +162,7 @@ export default function Shadowing() {
           </div>
 
           {/* Voice Record & Matching Studio */}
-          <div className="rounded-3xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-md dark:border-slate-800/80 dark:bg-[#111827]">
+          <div className="rounded-3xl border border-slate-200/80 bg-white p-5 sm:p-6 landscape-sm:p-4 shadow-md dark:border-slate-800/80 dark:bg-[#111827]">
             {speechSupported() ? (
               <button
                 onClick={record}
@@ -216,7 +216,7 @@ export default function Shadowing() {
               </div>
             )}
           </div>
-        </>
+        </div>
       )}
     </div>
   );

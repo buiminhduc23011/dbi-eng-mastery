@@ -122,7 +122,7 @@ export default function Drills({ onDrillComplete }: Props) {
   };
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4">
+    <div className="mx-auto max-w-3xl landscape-sm:max-w-5xl space-y-4 landscape-sm:space-y-2">
       {/* Header Info */}
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-lg font-bold flex items-center gap-2">
@@ -181,7 +181,7 @@ export default function Drills({ onDrillComplete }: Props) {
       )}
 
       {current && (
-        <div className="rounded-3xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-md dark:border-slate-800/80 dark:bg-[#111827]">
+        <div className="rounded-3xl border border-slate-200/80 bg-white p-5 sm:p-6 landscape-sm:p-4 shadow-md dark:border-slate-800/80 dark:bg-[#111827]">
           {/* Category & Audio */}
           <div className="flex items-center justify-between">
             <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-bold text-sky-700 dark:bg-sky-950/80 dark:text-sky-300">
