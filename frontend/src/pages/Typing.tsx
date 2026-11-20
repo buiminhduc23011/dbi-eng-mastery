@@ -320,9 +320,12 @@ export default function Typing({ onWordMastered }: Props) {
                   if (e.key === 'Enter') void check();
                 }}
                 autoFocus
-                placeholder="Gõ từ hoặc cụm tiếng Anh tương ứng…"
+                placeholder="Gõ từ hoặc cụm tiếng Anh tương ứng… (không cần gõ ... ? ! . ,)"
                 className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3.5 landscape-sm:py-2 text-center text-lg sm:text-xl landscape-sm:text-base font-bold shadow-sm focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900"
               />
+              <p className="text-center text-[11px] text-slate-400 dark:text-slate-500">
+                Không phân biệt hoa thường, không cần dấu câu <span className="font-mono">... ? ! . , ' -</span> — chỉ cần đúng từ.
+              </p>
               <button
                 onClick={check}
                 disabled={!input.trim()}

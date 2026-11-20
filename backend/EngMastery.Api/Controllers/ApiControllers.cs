@@ -30,27 +30,48 @@ public class DrillsController : ControllerBase
         return drills.Select(DtoMapper.ToDto).ToList();
     }
 
+    /// <summary>Offline grading: no AI cost. Weak drills take ~40% of slots (weighted by
+    /// how bad the score is) but due drills still flow through instead of being blocked.</summary>
     [HttpGet("due")]
     public async Task<ActionResult<List<DrillDto>>> Due([FromQuery] int take = 20)
     {
         int limit = Math.Clamp(take, 1, 100);
-        // Strictly prioritize practiced drills with low scores (< 80) until mastered.
         var weakDrills = await _db.SentenceDrills
             .Where(d => d.PracticeCount > 0 && d.LastScore < 80)
             .OrderBy(d => d.LastScore)
             .ThenByDescending(d => d.PracticeCount)
             .Take(limit)
             .ToListAsync();
-        if (weakDrills.Count > 0)
-            return weakDrills.Select(DtoMapper.ToDto).ToList();
 
         var now = DateTime.UtcNow;
-        var drills = await _db.SentenceDrills
+        var dueDrills = await _db.SentenceDrills
             .Where(d => d.NextReviewDate <= now)
             .OrderBy(d => d.NextReviewDate)
             .Take(limit)
             .ToListAsync();
-        return drills.Select(DtoMapper.ToDto).ToList();
+
+        var picked = new List<SentenceDrill>();
+        var pickedIds = new HashSet<int>();
+        void Add(SentenceDrill d) { if (pickedIds.Add(d.Id)) picked.Add(d); }
+
+        int weakSlots = weakDrills.Count == 0 || dueDrills.Count == 0
+            ? weakDrills.Count
+            : Math.Max(1, (int)Math.Round(limit * 0.4));
+        foreach (var d in OfflineEvaluator.WeightedSample(
+                     weakDrills, d => (80 - d.LastScore) + d.PracticeCount, Math.Min(weakSlots, weakDrills.Count)))
+            Add(d);
+        foreach (var d in dueDrills.OrderBy(_ => Random.Shared.Next()))
+        {
+            if (picked.Count >= limit) break;
+            Add(d);
+        }
+        // Backfill with remaining weak drills if due drills ran short.
+        foreach (var d in weakDrills)
+        {
+            if (picked.Count >= limit) break;
+            Add(d);
+        }
+        return picked.OrderBy(_ => Random.Shared.Next()).Select(DtoMapper.ToDto).ToList();
     }
 
     [HttpGet("{id}")]
@@ -206,41 +227,38 @@ public class TypingController : ControllerBase
     };
 
     /// <summary>
-    /// Pick a card for typing practice:
-    /// Priority 0 (Strict): Cards with MistakeCount &gt; 0 MUST be cleared first before any due/new cards.
-    /// Priority 1: Cards currently due based on exponential intervals.
-    /// Priority 2: If all correct, rotate random learned cards for unlimited practice without blocking.
+    /// Pick a card for typing practice (weighted random):
+    /// - Mistake-prone cards (MistakeCount &gt; 0) are boosted to ~35% of picks, weighted by MistakeCount —
+    ///   they show up more often but no longer block all other cards.
+    /// - Otherwise serve due cards (interval elapsed), or rotate random learned cards for free practice.
+    /// - mode=mistakes stays strict: only mistake cards (explicit review tab).
     /// </summary>
     [HttpGet("next")]
     public async Task<ActionResult<CardDto>> Next([FromQuery] string? category = null, [FromQuery] string? mode = null)
     {
+        bool mistakesOnly = string.Equals(mode, "mistakes", StringComparison.OrdinalIgnoreCase);
         var today = StudyLogService.TodayUtc();
         var q = _db.VocabCards.Where(c =>
             c.MistakeCount > 0 || c.Status == CardStatus.Learning || c.Status == CardStatus.Review || c.Status == CardStatus.Mastered);
         if (!string.IsNullOrWhiteSpace(category)) q = q.Where(c => c.Category == category);
-        if (string.Equals(mode, "mistakes", StringComparison.OrdinalIgnoreCase))
+        if (mistakesOnly)
             q = q.Where(c => c.MistakeCount > 0);
 
         var allCards = await q.ToListAsync();
         if (allCards.Count == 0)
         {
-            if (string.Equals(mode, "mistakes", StringComparison.OrdinalIgnoreCase))
+            if (mistakesOnly)
                 return NotFound(new { error = "Không còn từ gõ sai nào cần ôn! Tuyệt vời!" });
             return NotFound(new { error = "Chưa có thẻ từ vựng nào trong danh sách học." });
         }
 
-        // Priority 0: Always force mistake cards until MistakeCount == 0
-        var mistakeCards = allCards
-            .Where(c => c.MistakeCount > 0)
-            .OrderByDescending(c => c.MistakeCount)
-            .ThenBy(c => c.ConsecutiveTypingPasses)
-            .ToList();
-        if (mistakeCards.Count > 0)
-        {
-            var topMistakes = mistakeCards.Take(Math.Min(5, mistakeCards.Count)).ToList();
-            var card = topMistakes[Random.Shared.Next(topMistakes.Count)];
-            return DtoMapper.ToDto(card);
-        }
+        if (mistakesOnly)
+            return DtoMapper.ToDto(OfflineEvaluator.WeightedPick(allCards, c => 1 + c.MistakeCount));
+
+        // Weighted random: mistake cards boosted (~35%) but due/new cards still flow through.
+        var mistakeCards = allCards.Where(c => c.MistakeCount > 0).ToList();
+        if (mistakeCards.Count > 0 && Random.Shared.NextDouble() < 0.35)
+            return DtoMapper.ToDto(OfflineEvaluator.WeightedPick(mistakeCards, c => 1 + c.MistakeCount));
 
         // Priority 1: Due cards (never typed or interval elapsed)
         var dueCards = allCards.Where(c =>
@@ -282,12 +300,10 @@ public class TypingController : ControllerBase
         var card = await _db.VocabCards.FindAsync(id);
         if (card is null) return NotFound();
 
-        string Norm(string s) =>
-            System.Text.RegularExpressions.Regex.Replace((s ?? string.Empty).Trim().ToLowerInvariant(), @"\s+", " ");
-        string want = Norm(card.Term);
-        string got = Norm(dto.UserInput ?? string.Empty);
+        string want = OfflineEvaluator.NormalizeTyping(card.Term);
+        string got = OfflineEvaluator.NormalizeTyping(dto.UserInput ?? string.Empty);
         double sim = OfflineEvaluator.Similarity(got, want);
-        bool passed = got == want || sim >= 0.9;
+        bool passed = got.Length > 0 && want.Length > 0 && (got == want || sim >= 0.9);
 
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         bool isDue = card.LastTypingPassDate == null ||

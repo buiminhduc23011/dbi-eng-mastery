@@ -20,8 +20,9 @@ public class SrsController : ControllerBase
         _logs = logs;
     }
 
-    /// <summary>Review queue: strictly prioritize mistake-prone cards (MistakeCount &gt; 0) until all are cleared,
-    /// before serving regular due/new cards.</summary>
+    /// <summary>Review queue: weighted mix — mistake-prone cards take ~40% of slots
+    /// (weighted by MistakeCount) but due cards still flow through instead of being blocked.
+    /// Use deck=leeches for a strict mistake-only session.</summary>
     [HttpGet("due")]
     public async Task<ActionResult<List<CardDto>>> Due([FromQuery] int take = 50, [FromQuery] string? category = null)
     {
@@ -35,21 +36,39 @@ public class SrsController : ControllerBase
             .Take(limit)
             .ToListAsync();
 
-        if (mistakeCards.Count > 0)
-        {
-            Shuffle(mistakeCards);
-            return mistakeCards.Select(DtoMapper.ToDto).ToList();
-        }
-
         var now = DateTime.UtcNow;
-        var q = _db.VocabCards.Where(c => c.NextReviewDate <= now);
-        if (!string.IsNullOrWhiteSpace(category)) q = q.Where(c => c.Category == category);
-        var cards = await q
+        var dueQuery = _db.VocabCards.Where(c => c.NextReviewDate <= now);
+        if (!string.IsNullOrWhiteSpace(category)) dueQuery = dueQuery.Where(c => c.Category == category);
+        var dueCards = await dueQuery
             .OrderBy(c => c.NextReviewDate)
             .Take(limit)
             .ToListAsync();
-        Shuffle(cards);
-        return cards.Select(DtoMapper.ToDto).ToList();
+
+        // Merge: ~40% mistake-boosted slots, rest due cards (dedupe by id), then shuffle.
+        var picked = new List<VocabCard>();
+        var pickedIds = new HashSet<int>();
+        void Add(VocabCard c) { if (pickedIds.Add(c.Id)) picked.Add(c); }
+
+        int mistakeSlots = mistakeCards.Count == 0 || dueCards.Count == 0
+            ? mistakeCards.Count
+            : Math.Max(1, (int)Math.Round(limit * 0.4));
+        foreach (var c in OfflineEvaluator.WeightedSample(
+                     mistakeCards, c => 1 + c.MistakeCount, Math.Min(mistakeSlots, mistakeCards.Count)))
+            Add(c);
+        Shuffle(dueCards);
+        foreach (var c in dueCards)
+        {
+            if (picked.Count >= limit) break;
+            Add(c);
+        }
+        // Backfill with remaining mistakes if due cards ran short.
+        foreach (var c in mistakeCards)
+        {
+            if (picked.Count >= limit) break;
+            Add(c);
+        }
+        Shuffle(picked);
+        return picked.Select(DtoMapper.ToDto).ToList();
     }
 
     /// <summary>Cards frequently answered wrong (MistakeCount &gt; 0), hardest first — focused leech review.
