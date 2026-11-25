@@ -40,7 +40,7 @@ cd frontend; npm install; npm run dev
 | `ConnectionStrings:SqlServer` | empty | e.g. `Server=192.168.11.101,1433;Database=EngMastery;User Id=sa;Password=...;TrustServerCertificate=True` |
 | `Urls` | `http://*:8090` | listening port |
 
-Gemini key is stored in the `AppSetting` table via **Settings page** in the UI. The model picker is populated live from `GET /api/ai/models` (Gemini `v1beta/models`, text models with `generateContent`), so renamed/retired models show up automatically; if no key is set it falls back to the built-in list (`gemini-3.8-flash` by default). Stored ids that Google has retired are migrated to the current default on startup.
+Gemini key is stored in the `AppSetting` table via **Settings page** in the UI. The model picker is populated live from `GET /api/ai/models` (Gemini `v1beta/models`, text models with `generateContent`), so renamed/retired models show up automatically; if no key is set it falls back to the built-in list (`gemini-3.6-flash` by default). Stored ids that Google has retired are migrated to the current default on startup. Calls are capped at 15s for the chosen model and fall back to `gemini-3.5-flash-lite`; a model that just failed is skipped for 30 minutes so the next call is fast.
 
 ## Docker deploy (Linux home-server)
 

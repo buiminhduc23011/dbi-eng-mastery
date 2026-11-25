@@ -27,14 +27,17 @@ public record AiModelInfo(string Id, string Label);
 
 public class GeminiService
 {
-    /// <summary>Model used when the learner has not chosen one (kept current with Gemini releases).</summary>
-    public const string DefaultModel = "gemini-3.8-flash";
+    /// <summary>
+    /// Model used when the learner has not chosen one. Gemini's newest Flash is often rate-limited or
+    /// "experiencing high demand" (multi-second hangs), so the default is the stable previous-gen Flash.
+    /// </summary>
+    public const string DefaultModel = "gemini-3.6-flash";
 
     /// <summary>Offline list shown when no key is set or the live model list cannot be fetched.</summary>
     public static readonly IReadOnlyList<AiModelInfo> FallbackModels = new List<AiModelInfo>
     {
-        new(DefaultModel, "Nhanh & thông minh nhất (khuyến nghị)"),
-        new("gemini-3.6-flash", "Bản ổn định thế hệ trước"),
+        new(DefaultModel, "Ổn định & nhanh (khuyến nghị)"),
+        new("gemini-3.8-flash", "Mới nhất, có thể quá tải"),
         new("gemini-3.5-flash-lite", "Rẻ & nhanh cho tác vụ nhẹ"),
         new("gemini-3.1-flash-lite", "Tiết kiệm nhất"),
         new("gemini-3.1-pro-preview", "Suy luận sâu (preview)"),
@@ -279,12 +282,16 @@ public class GeminiService
         return doc.RootElement.GetProperty("responseData").GetProperty("translatedText").GetString() ?? text;
     }
 
-    private const int MaxGenerateAttempts = 3;
     private const int DefaultOutputTokens = 2048;
     private const int RetryOutputTokens = 8192;
 
-    /// <summary>Stable model used when the chosen one is overloaded/unreachable.</summary>
-    public const string FallbackModel = "gemini-3.6-flash";
+    /// <summary>Stable fallback model, used when the chosen one is overloaded/unreachable.</summary>
+    public const string FallbackModel = "gemini-3.5-flash-lite";
+
+    /// <summary>Don't wait 60s on a congested model: give the primary a short leash, then fall back.</summary>
+    private static readonly TimeSpan PrimaryAttemptTimeout = TimeSpan.FromSeconds(15);
+    private static readonly TimeSpan FallbackAttemptTimeout = TimeSpan.FromSeconds(25);
+    private static readonly TimeSpan ModelCooldown = TimeSpan.FromMinutes(30);
 
     /// <summary>Thrown when Gemini is temporarily unavailable (429/5xx/timeout) so a fallback model can take over.</summary>
     public class GeminiUnavailableException : Exception
@@ -294,6 +301,10 @@ public class GeminiService
 
     /// <summary>Models that rejected <c>thinkingConfig.thinkingLevel</c> (cached after the first 400).</summary>
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, bool> ThinkingLevelRejected =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Circuit breaker: a model that just failed is skipped until <c>cooldownUntil</c>.</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, DateTime> CooldownUntil =
         new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
@@ -325,7 +336,8 @@ public class GeminiService
         });
     }
 
-    private async Task<string> GenerateAsync(string model, string apiKey, string prompt, CancellationToken ct)
+    private async Task<string> GenerateAsync(string model, string apiKey, string prompt,
+        TimeSpan attemptTimeout, int maxAttempts, CancellationToken ct)
     {
         var client = _httpFactory.CreateClient("gemini");
         string url = $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={apiKey}";
@@ -343,15 +355,18 @@ public class GeminiService
             System.Net.HttpStatusCode status;
             try
             {
+                // Cap each attempt so a hanging model cannot stall the whole request.
+                using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                timeoutCts.CancelAfter(attemptTimeout);
                 using var resp = await client.PostAsync(url,
-                    new StringContent(BuildPayload(prompt, thinkingConfig, maxOutputTokens), Encoding.UTF8, "application/json"), ct);
+                    new StringContent(BuildPayload(prompt, thinkingConfig, maxOutputTokens), Encoding.UTF8, "application/json"),
+                    timeoutCts.Token);
                 status = resp.StatusCode;
                 raw = await resp.Content.ReadAsStringAsync(ct);
             }
             catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
             {
-                // HttpClient timeout: treat as "model too slow/overloaded" so the caller can fall back.
-                _logger.LogWarning("Gemini call timed out after {Model}.", model);
+                _logger.LogWarning("{Model} timed out after {Timeout}s.", model, attemptTimeout.TotalSeconds);
                 throw new GeminiUnavailableException("Gemini request timed out.", ex);
             }
 
@@ -368,7 +383,6 @@ public class GeminiService
                 {
                     answer = textEl.GetString();
                 }
-                bool hasText = answer is not null;
 
                 if (finish == "MAX_TOKENS" && !grownForTruncation)
                 {
@@ -381,7 +395,7 @@ public class GeminiService
                     continue;
                 }
 
-                if (!hasText)
+                if (answer is null)
                 {
                     _logger.LogWarning("{Model} returned no text (finishReason={Finish}).", model, finish);
                     throw new GeminiUnavailableException($"Gemini returned no text (finishReason: {finish}).");
@@ -389,7 +403,8 @@ public class GeminiService
                 if (finish == "MAX_TOKENS")
                     _logger.LogWarning("{Model} answer truncated at {Cap} tokens.", model, maxOutputTokens);
 
-                return answer!;
+                CooldownUntil.TryRemove(model, out _);
+                return answer;
             }
 
             if (status == System.Net.HttpStatusCode.BadRequest
@@ -408,12 +423,12 @@ public class GeminiService
                 or System.Net.HttpStatusCode.BadGateway
                 or System.Net.HttpStatusCode.ServiceUnavailable
                 or System.Net.HttpStatusCode.GatewayTimeout;
-            _logger.LogWarning("Gemini call failed ({Attempt}/{MaxAttempts}): {Status} {Body}",
-                attempt, MaxGenerateAttempts, status, raw);
+            _logger.LogWarning("Gemini call failed ({Attempt}/{MaxAttempts}): {Status} {Model} {Body}",
+                attempt, maxAttempts, status, model, raw);
 
-            if (transient && attempt < MaxGenerateAttempts)
+            if (transient && attempt < maxAttempts)
             {
-                await Task.Delay(TimeSpan.FromSeconds(Math.Pow(2, attempt - 1)), ct);
+                await Task.Delay(TimeSpan.FromSeconds(attempt), ct);
                 continue;
             }
             if (transient)
@@ -422,19 +437,36 @@ public class GeminiService
         }
     }
 
-    /// <summary>Generate with the chosen model, falling back to <see cref="FallbackModel"/> when it is overloaded.</summary>
+    /// <summary>
+    /// Generate with the chosen model, falling back to <see cref="FallbackModel"/> when it is overloaded.
+    /// A failing model is skipped for <see cref="ModelCooldown"/> so the next call is fast, not a 20s wait.
+    /// </summary>
     private async Task<string> GenerateWithFallbackAsync(string model, string apiKey, string prompt, CancellationToken ct)
     {
-        try
+        bool isFallback = string.Equals(model, FallbackModel, StringComparison.OrdinalIgnoreCase);
+        bool cooling = CooldownUntil.TryGetValue(model, out var until) && until > DateTime.UtcNow;
+
+        if (!isFallback && !cooling)
         {
-            return await GenerateAsync(model, apiKey, prompt, ct);
+            try
+            {
+                // One attempt only: retrying a congested model just doubles the wait.
+                return await GenerateAsync(model, apiKey, prompt, PrimaryAttemptTimeout, maxAttempts: 1, ct);
+            }
+            catch (GeminiUnavailableException ex)
+            {
+                CooldownUntil[model] = DateTime.UtcNow + ModelCooldown;
+                _logger.LogWarning("{Model} unavailable ({Reason}); using {Fallback} for the next {Minutes} min.",
+                    model, ex.Message, FallbackModel, ModelCooldown.TotalMinutes);
+            }
         }
-        catch (GeminiUnavailableException ex) when (!string.Equals(model, FallbackModel, StringComparison.OrdinalIgnoreCase))
+        else if (cooling)
         {
-            _logger.LogWarning("{Model} unavailable ({Reason}); falling back to {Fallback}.",
-                model, ex.Message, FallbackModel);
-            return await GenerateAsync(FallbackModel, apiKey, prompt, ct);
+            _logger.LogInformation("{Model} is cooling down until {Until:HH:mm}; using {Fallback}.",
+                model, until, FallbackModel);
         }
+
+        return await GenerateAsync(FallbackModel, apiKey, prompt, FallbackAttemptTimeout, maxAttempts: 2, ct);
     }
 
     private static string StripFences(string s)
