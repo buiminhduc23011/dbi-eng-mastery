@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.RegularExpressions;
 
 namespace EngMastery.Api.Services;
@@ -9,6 +10,13 @@ public record DrillScore(
     double Similarity,
     List<string> MatchedWords,
     List<string> MissedWords);
+
+/// <summary>Result of grading a typed answer against a target term plus its accepted paraphrases.</summary>
+public record TypingMatch(
+    bool Passed,
+    bool MatchedAlternative,
+    string? Alternative,
+    double Similarity);
 
 /// <summary>
 /// Zero-AI-cost offline grading: token matching + Levenshtein similarity.
@@ -114,6 +122,53 @@ public static partial class OfflineEvaluator
         if (a.Length == 0 || b.Length == 0) return 0.0;
         int dist = Levenshtein(a, b);
         return 1.0 - (double)dist / Math.Max(a.Length, b.Length);
+    }
+
+    /// <summary>Minimum similarity for a typed answer to count as correct.</summary>
+    public const double TypingPassThreshold = 0.9;
+
+    /// <summary>Reads a JSON string array (e.g. accepted paraphrases), tolerating legacy/empty values.</summary>
+    public static List<string> ParseTermList(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json) || json == "[]") return new List<string>();
+        try
+        {
+            return JsonSerializer.Deserialize<List<string>>(json)?
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .Select(s => s.Trim())
+                .ToList() ?? new List<string>();
+        }
+        catch (JsonException)
+        {
+            return new List<string>();
+        }
+    }
+
+    /// <summary>
+    /// Grade a typed term. Exact target (fuzzy ≥ 0.9) is a pass; a paraphrase from
+    /// <paramref name="alternatives"/> is a "near miss" — right meaning, wrong target phrase.
+    /// </summary>
+    public static TypingMatch MatchTyping(string? userInput, string target, IEnumerable<string>? alternatives = null)
+    {
+        string got = NormalizeTyping(userInput);
+        string want = NormalizeTyping(target);
+        if (got.Length == 0 || want.Length == 0) return new TypingMatch(false, false, null, 0);
+
+        double targetSim = Similarity(got, want);
+        if (targetSim >= TypingPassThreshold) return new TypingMatch(true, false, null, targetSim);
+
+        TypingMatch? bestAlt = null;
+        foreach (var alt in alternatives ?? Enumerable.Empty<string>())
+        {
+            string normAlt = NormalizeTyping(alt);
+            if (normAlt.Length == 0) continue;
+            double sim = Similarity(got, normAlt);
+            if (sim < TypingPassThreshold) continue;
+            if (bestAlt is null || sim > bestAlt.Similarity)
+                bestAlt = new TypingMatch(false, true, alt, sim);
+        }
+
+        return bestAlt ?? new TypingMatch(false, false, null, targetSim);
     }
 
     private static bool TokenMatch(string userToken, string refToken)

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, type VocabCard } from '../lib/api';
 import { speak, stopSpeak } from '../lib/speech';
-import { Volume2, VolumeX, ArrowRight, Keyboard, Trophy, CheckCircle2, XCircle } from 'lucide-react';
+import { Volume2, VolumeX, ArrowRight, Keyboard, Trophy, CheckCircle2, XCircle, Lightbulb, RotateCcw } from 'lucide-react';
 
 interface TypingResult {
   passed: boolean;
@@ -14,6 +14,14 @@ interface TypingResult {
   countedToday: boolean;
   nextIntervalDays?: number;
   mistakeCount?: number;
+  /** Đúng nghĩa nhưng khác cụm mục tiêu (khớp một cách diễn đạt tương đương). */
+  nearMiss?: boolean;
+  matchedAlternative?: string | null;
+  /** Còn được gõ lại trong phiên này không (tối đa 3 lượt/thẻ/ngày). */
+  retryAllowed?: boolean;
+  remainingRetries?: number;
+  /** Lượt đúng này đến sau khi đã gõ sai/near-miss trong ngày. */
+  retried?: boolean;
 }
 
 interface Props {
@@ -34,6 +42,7 @@ export default function Typing({ onWordMastered }: Props) {
   const [mistakesCount, setMistakesCount] = useState(0);
   const [autoSpeak, setAutoSpeak] = useState(() => localStorage.getItem('typing:autoSpeak') !== '0');
   const nextBtnRef = useRef<HTMLButtonElement>(null);
+  const retryBtnRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => () => stopSpeak(), []);
@@ -47,10 +56,11 @@ export default function Typing({ onWordMastered }: Props) {
     });
   };
 
-  // Auto focus next button on result, input otherwise
+  // Auto focus: ưu tiên "Gõ lại" khi còn lượt, rồi tới "Từ tiếp theo", còn lại là ô nhập.
   useEffect(() => {
-    if (result) nextBtnRef.current?.focus();
-    else inputRef.current?.focus();
+    if (!result) inputRef.current?.focus();
+    else if (result.retryAllowed) retryBtnRef.current?.focus();
+    else nextBtnRef.current?.focus();
   }, [result]);
 
   const loadMistakesCount = useCallback(async (cat: string) => {
@@ -110,7 +120,13 @@ export default function Typing({ onWordMastered }: Props) {
     }
   };
 
-  // Keyboard shortcuts: R = nghe lại đáp án, Enter = từ tiếp theo (chỉ khi đã có kết quả).
+  // Gõ lại ngay trên cùng thẻ (không nhảy sang từ khác). Chỉ lượt đúng ĐẦU TIÊN trong ngày mới cộng chuỗi.
+  const retry = useCallback(() => {
+    setResult(null);
+    setInput('');
+  }, []);
+
+  // Keyboard shortcuts: R = nghe lại đáp án, T = gõ lại, Enter = từ tiếp theo (chỉ khi đã có kết quả).
   // Khi đang gõ (chưa có result) thì không chặn phím R để vẫn gõ chữ "r" bình thường.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -121,16 +137,19 @@ export default function Typing({ onWordMastered }: Props) {
       if (e.key === 'r' || e.key === 'R') {
         e.preventDefault();
         speak(result.correctTerm);
+      } else if ((e.key === 't' || e.key === 'T') && result.retryAllowed) {
+        e.preventDefault();
+        retry();
       } else if (e.key === 'Enter') {
-        // Nếu nút "Từ tiếp theo" đang focus thì để click mặc định xử lý, tránh gọi 2 lần.
-        if (document.activeElement === nextBtnRef.current) return;
+        // Nếu nút đang focus thì để click mặc định xử lý, tránh gọi 2 lần.
+        if (document.activeElement === nextBtnRef.current || document.activeElement === retryBtnRef.current) return;
         e.preventDefault();
         void loadNext(category, mode);
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [result, category, mode, loadNext]);
+  }, [result, category, mode, loadNext, retry]);
 
   const streakDots = (streak: number, required = 5) => (
     <div className="flex items-center gap-1.5">
@@ -326,6 +345,9 @@ export default function Typing({ onWordMastered }: Props) {
               <p className="text-center text-[11px] text-slate-400 dark:text-slate-500">
                 Không phân biệt hoa thường, không cần dấu câu <span className="font-mono">... ? ! . , ' -</span> — chỉ cần đúng từ.
               </p>
+              <p className="text-center text-[11px] text-slate-400 dark:text-slate-500">
+                Gõ đúng nghĩa bằng cách nói khác vẫn được ghi nhận (không tính là gõ sai), nhưng chỉ đúng cụm mục tiêu mới cộng cấp độ.
+              </p>
               <button
                 onClick={check}
                 disabled={!input.trim()}
@@ -340,7 +362,9 @@ export default function Typing({ onWordMastered }: Props) {
               className={`mt-6 landscape-sm:mt-3 rounded-2xl p-4 sm:p-5 landscape-sm:p-3 animate-scale-in ${
                 result.passed
                   ? 'border border-emerald-200 bg-emerald-50/80 dark:border-emerald-900/60 dark:bg-emerald-950/40'
-                  : 'border border-rose-200 bg-rose-50/80 dark:border-rose-900/60 dark:bg-rose-950/40'
+                  : result.nearMiss
+                    ? 'border border-amber-200 bg-amber-50/80 dark:border-amber-900/60 dark:bg-amber-950/40'
+                    : 'border border-rose-200 bg-rose-50/80 dark:border-rose-900/60 dark:bg-rose-950/40'
               }`}
             >
               {result.mastered ? (
@@ -366,9 +390,24 @@ export default function Typing({ onWordMastered }: Props) {
                     <span>·</span>
                     {result.countedToday ? (
                       <span>Khoảng cách ôn tiếp theo: <b>sau {result.nextIntervalDays ?? (result.streak * 2)} ngày</b></span>
+                    ) : result.retried ? (
+                      <span className="text-slate-500 dark:text-slate-400 italic">(Đúng sau khi gõ lại — chuỗi chỉ cộng ở lần gõ đầu tiên trong ngày)</span>
                     ) : (
                       <span className="text-slate-500 dark:text-slate-400 italic">(Lượt luyện xoay vòng — không cộng dồn ngày)</span>
                     )}
+                  </div>
+                </div>
+              ) : result.nearMiss ? (
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 font-bold text-amber-800 dark:text-amber-200 text-base">
+                    <Lightbulb size={18} className="text-amber-600 dark:text-amber-400" />
+                    <span>Đúng nghĩa — nhưng chưa đúng cụm cần nhớ</span>
+                  </div>
+                  <div className="text-xs text-amber-800/90 dark:text-amber-300/90">
+                    Bạn gõ: &ldquo;{input}&rdquo;
+                    {result.matchedAlternative && <> (khớp cách nói <b>&ldquo;{result.matchedAlternative}&rdquo;</b>)</>}
+                    {' '}· Cụm mục tiêu là <span className="font-mono font-bold underline">{result.correctTerm}</span>.
+                    Lần này không bị tính là gõ sai và chuỗi giữ nguyên, nhưng cấp độ chỉ cộng ở lần gõ đúng đầu tiên trong ngày — gõ lại để qua thẻ này ngay.
                   </div>
                 </div>
               ) : (
@@ -379,7 +418,9 @@ export default function Typing({ onWordMastered }: Props) {
                   </div>
                   <div className="text-xs text-rose-700 dark:text-rose-300">
                     Bạn gõ: &ldquo;{input}&rdquo; · Đã gõ sai từ này {result.mistakeCount ?? (card.mistakeCount + 1)} lần
-                    · Chuỗi bị đặt lại về 0, sẽ hỏi lại vào ngày mai để củng cố.
+                    {result.retryAllowed
+                      ? ` · Gõ lại ngay để nhớ đúng cụm (còn ${result.remainingRetries ?? 0} lượt thử hôm nay).`
+                      : ' · Chuỗi bị đặt lại về 0, sẽ hỏi lại vào ngày mai để củng cố.'}
                   </div>
                 </div>
               )}
@@ -392,7 +433,7 @@ export default function Typing({ onWordMastered }: Props) {
               )}
 
               {/* Action Buttons */}
-              <div className="mt-4 flex gap-2">
+              <div className="mt-4 flex flex-wrap gap-2">
                 <button
                   onClick={() => speak(result.correctTerm)}
                   className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-200"
@@ -400,17 +441,37 @@ export default function Typing({ onWordMastered }: Props) {
                   <Volume2 size={15} />
                   <span>Nghe (R)</span>
                 </button>
+                {result.retryAllowed && (
+                  <button
+                    ref={retryBtnRef}
+                    onClick={retry}
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-amber-500 px-3 py-2.5 text-xs font-bold text-white shadow-md shadow-amber-500/25 transition hover:bg-amber-600 active:scale-95"
+                  >
+                    <RotateCcw size={15} />
+                    <span>Gõ lại ngay (T)</span>
+                  </button>
+                )}
                 <button
                   ref={nextBtnRef}
                   onClick={() => loadNext(category, mode)}
-                  className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-indigo-600 py-2.5 text-xs font-bold text-white shadow-md shadow-indigo-600/25 transition hover:bg-indigo-700 active:scale-95"
+                  className={
+                    result.retryAllowed
+                      ? 'flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white py-2.5 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-200'
+                      : 'flex flex-1 items-center justify-center gap-2 rounded-xl bg-indigo-600 py-2.5 text-xs font-bold text-white shadow-md shadow-indigo-600/25 transition hover:bg-indigo-700 active:scale-95'
+                  }
                 >
                   <span>Từ tiếp theo (Enter)</span>
                   <ArrowRight size={15} />
                 </button>
               </div>
-              <div className="mt-2 flex items-center justify-center gap-3 text-[11px] text-slate-400">
+              <div className="mt-2 flex flex-wrap items-center justify-center gap-3 text-[11px] text-slate-400">
                 <span className="flex items-center gap-1"><kbd className="em-kbd">R</kbd> Nghe lại</span>
+                {result.retryAllowed && (
+                  <>
+                    <span>·</span>
+                    <span className="flex items-center gap-1"><kbd className="em-kbd">T</kbd> Gõ lại</span>
+                  </>
+                )}
                 <span>·</span>
                 <span className="flex items-center gap-1"><kbd className="em-kbd">Enter</kbd> Từ tiếp theo</span>
               </div>

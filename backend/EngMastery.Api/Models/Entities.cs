@@ -21,6 +21,12 @@ public class VocabCard
     public string ClozeHint { get; set; } = string.Empty;
     public string Category { get; set; } = "Daily & Casual";
 
+    /// <summary>
+    /// Accepted paraphrases for typing practice (JSON array). A match counts as "right meaning,
+    /// wrong target phrase" (near miss): it is never penalised, but it does not advance the streak.
+    /// </summary>
+    public string AltTermsJson { get; set; } = "[]";
+
     // SM-2 fields
     public int Repetition { get; set; } = 0;
     public int IntervalDays { get; set; } = 0;
@@ -34,6 +40,10 @@ public class VocabCard
     // Typing-practice: pass 5 consecutive times on different days => Mastered.
     public int ConsecutiveTypingPasses { get; set; } = 0;
     public DateOnly? LastTypingPassDate { get; set; }
+
+    // Typing-practice retry cap: attempts that did not pass (wrong or near miss) today.
+    public DateOnly? LastFailedTypingDate { get; set; }
+    public int SameDayTypingAttempts { get; set; } = 0;
 }
 
 public class SentenceDrill

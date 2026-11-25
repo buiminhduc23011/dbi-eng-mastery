@@ -117,6 +117,10 @@ namespace EngMastery.Api.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("AltTermsJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Category")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -149,6 +153,9 @@ namespace EngMastery.Api.Migrations
                     b.Property<int>("IntervalDays")
                         .HasColumnType("INTEGER");
 
+                    b.Property<DateOnly?>("LastFailedTypingDate")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime?>("LastReviewedAt")
                         .HasColumnType("TEXT");
 
@@ -174,6 +181,9 @@ namespace EngMastery.Api.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<int>("Repetition")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("SameDayTypingAttempts")
                         .HasColumnType("INTEGER");
 
                     b.Property<int>("Status")

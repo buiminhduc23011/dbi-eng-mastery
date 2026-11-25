@@ -40,7 +40,7 @@ cd frontend; npm install; npm run dev
 | `ConnectionStrings:SqlServer` | empty | e.g. `Server=192.168.11.101,1433;Database=EngMastery;User Id=sa;Password=...;TrustServerCertificate=True` |
 | `Urls` | `http://*:8090` | listening port |
 
-Gemini key is stored in the `AppSetting` table via **Settings page** in the UI (models: `gemini-2.5-flash`, `gemini-1.5-flash`).
+Gemini key is stored in the `AppSetting` table via **Settings page** in the UI. The model picker is populated live from `GET /api/ai/models` (Gemini `v1beta/models`, text models with `generateContent`), so renamed/retired models show up automatically; if no key is set it falls back to the built-in list (`gemini-3.8-flash` by default). Stored ids that Google has retired are migrated to the current default on startup.
 
 ## Docker deploy (Linux home-server)
 
@@ -75,11 +75,20 @@ and restarts the service.
 
 - `GET /api/srs/due` · `POST /api/srs/{id}/review {quality 1-4}`
 - `GET /api/cards` CRUD · `GET /api/cards/categories`
+- `GET /api/typing/next?category=&mode=all|mistakes` · `POST /api/typing/{id}/submit {userInput}` · `GET /api/typing/mistakes/count`
 - `GET /api/drills/due` · `POST /api/drills/{id}/submit {userInput}`
 - `POST /api/ai/evaluate-sentence` · `POST /api/ai/polish` · `GET /api/ai/status`
 - `GET /api/dashboard` · `POST /api/dashboard/log-time`
 - `GET /api/backup/export` · `POST /api/backup/import`
 - `GET/PUT /api/settings`
+
+## Typing practice
+
+Input is normalized (case, whitespace, punctuation, apostrophes) and compared with Levenshtein similarity; a pass needs ≥ 0.9 against the card term.
+
+`VocabCards.AltTermsJson` lists accepted paraphrases for a card (seeded from `DataSeeder.AltTerms.cs`). A paraphrase match is a **near miss**: right meaning, wrong target phrase — it does not raise `MistakeCount` and does not reset the streak, but it never earns streak credit and the card stays in today's queue.
+
+The streak advances only on the first passing attempt of a due card on a new day. Each card allows 3 attempts per day (`SameDayTypingAttempts`), so a slip can be retried in the same session instead of waiting until tomorrow.
 
 ## SM-2 details
 

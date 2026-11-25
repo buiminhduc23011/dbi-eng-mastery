@@ -1,5 +1,6 @@
 using EngMastery.Api.Data;
 using EngMastery.Api.Models;
+using EngMastery.Api.Services;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 
@@ -993,6 +994,23 @@ public static partial class DataSeeder
             await db.SaveChangesAsync();
         }
 
+        // Backfill accepted paraphrases for existing cards (additive: never overwrites a non-empty value,
+        // so learner data and manual edits are preserved).
+        var altMap = GetAltTerms();
+        var cardsWithoutAlts = await db.VocabCards
+            .Where(c => c.AltTermsJson == null || c.AltTermsJson == "" || c.AltTermsJson == "[]")
+            .ToListAsync();
+        bool altsChanged = false;
+        foreach (var card in cardsWithoutAlts)
+        {
+            if (altMap.TryGetValue(card.Term, out var alts) && alts.Length > 0)
+            {
+                card.AltTermsJson = JsonSerializer.Serialize(alts);
+                altsChanged = true;
+            }
+        }
+        if (altsChanged) await db.SaveChangesAsync();
+
         // Keep category naming consistent for ACS cards added in earlier versions.
         var legacyAcsCards = await db.VocabCards
             .Where(c => c.Category == "ACS & AGV")
@@ -1030,12 +1048,21 @@ public static partial class DataSeeder
         var defaults = new Dictionary<string, string>
         {
             ["DailyTarget"] = "20",
-            ["GeminiModel"] = "gemini-2.5-flash",
+            ["GeminiModel"] = GeminiService.DefaultModel,
             ["GeminiApiKey"] = "",
         };
         foreach (var (k, v) in defaults)
             if (await db.AppSettings.FindAsync(k) is null)
                 db.AppSettings.Add(new AppSetting { Key = k, Value = v });
         await db.SaveChangesAsync();
+
+        // Gemini retires model ids over time; move a stored retired id to the current default
+        // (only the model choice is touched — API key and all learning data stay untouched).
+        var modelSetting = await db.AppSettings.FindAsync("GeminiModel");
+        if (modelSetting is not null && GeminiService.RetiredModels.Contains(modelSetting.Value))
+        {
+            modelSetting.Value = GeminiService.DefaultModel;
+            await db.SaveChangesAsync();
+        }
     }
 }

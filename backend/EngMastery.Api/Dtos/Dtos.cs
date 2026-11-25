@@ -29,7 +29,12 @@ public record TypingResultDto(
     bool Mastered,
     bool CountedToday,
     int NextIntervalDays,
-    int MistakeCount);
+    int MistakeCount,
+    bool NearMiss = false,
+    string? MatchedAlternative = null,
+    bool RetryAllowed = false,
+    int RemainingRetries = 0,
+    bool Retried = false);
 
 public record DrillDto(
     int Id, string Category, string PromptVi, string TargetEn,

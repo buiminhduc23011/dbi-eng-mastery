@@ -158,6 +158,22 @@ public class AiController : ControllerBase
         return Ok(new { configured, model });
     }
 
+    /// <summary>Current Gemini text models, fetched live from Google when a key is saved.</summary>
+    [HttpGet("models")]
+    public async Task<ActionResult<object>> Models(CancellationToken ct)
+    {
+        var (configured, current, _) = await _gemini.GetConfigAsync();
+        var (fromApi, models) = await _gemini.ListModelsAsync(ct);
+        return Ok(new
+        {
+            configured,
+            current,
+            fromApi,
+            models,
+            currentRetired = GeminiService.RetiredModels.Contains(current),
+        });
+    }
+
     /// <summary>On-demand AI grading of a sentence (manual button only).</summary>
     [HttpPost("evaluate-sentence")]
     public async Task<ActionResult<object>> Evaluate([FromBody] EvaluateDto dto, CancellationToken ct)
@@ -198,6 +214,10 @@ public class AiController : ControllerBase
 public class TypingController : ControllerBase
 {
     private const int RequiredStreak = 5;
+
+    /// <summary>Attempts allowed per card per day: the first try + 2 in-session retries.</summary>
+    private const int MaxAttemptsPerDay = 3;
+
     private readonly AppDbContext _db;
     private readonly StudyLogService _logs;
 
@@ -291,8 +311,11 @@ public class TypingController : ControllerBase
 
     /// <summary>
     /// Grade typed input with exponential spacing.
-    /// Only genuine due cards on a new day increment the streak (+1).
-    /// Rotation / extra practice passes do NOT falsely increment the streak count.
+    /// - Exact target term (fuzzy) = pass; only a genuinely due card on a new day increments the streak (+1).
+    /// - Accepted paraphrase (card.AltTermsJson) = "near miss": right meaning, wrong target phrase.
+    ///   It is not penalised (no mistake, streak kept) but it never advances the streak.
+    /// - A non-passing attempt can be retried in the same session (capped per day) so a slip does not
+    ///   cost a whole day; only the first attempt of the day can advance the streak.
     /// </summary>
     [HttpPost("{id}/submit")]
     public async Task<ActionResult<TypingResultDto>> Submit(int id, [FromBody] TypingSubmitDto dto)
@@ -300,14 +323,18 @@ public class TypingController : ControllerBase
         var card = await _db.VocabCards.FindAsync(id);
         if (card is null) return NotFound();
 
-        string want = OfflineEvaluator.NormalizeTyping(card.Term);
-        string got = OfflineEvaluator.NormalizeTyping(dto.UserInput ?? string.Empty);
-        double sim = OfflineEvaluator.Similarity(got, want);
-        bool passed = got.Length > 0 && want.Length > 0 && (got == want || sim >= 0.9);
+        var match = OfflineEvaluator.MatchTyping(
+            dto.UserInput, card.Term, OfflineEvaluator.ParseTermList(card.AltTermsJson));
+        bool passed = match.Passed;
+        bool nearMiss = match.MatchedAlternative;
 
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         bool isDue = card.LastTypingPassDate == null ||
                      card.LastTypingPassDate.Value.AddDays(GetIntervalDays(card.ConsecutiveTypingPasses)) <= today;
+
+        // Attempts that did not pass earlier today (reset on a new day or after a pass).
+        int attemptsToday = card.LastFailedTypingDate == today ? card.SameDayTypingAttempts : 0;
+        bool retried = attemptsToday > 0;
 
         bool counted = false;
         if (passed)
@@ -315,19 +342,29 @@ public class TypingController : ControllerBase
             // Each correct typing reduces the lifetime wrong-count (floor at 0).
             if (card.MistakeCount > 0) card.MistakeCount--;
 
-            // Only advance streak if this card was actually DUE and hasn't passed today yet
-            if (isDue && card.LastTypingPassDate != today)
+            // Only the first attempt of the day, on a card that was actually due, advances the streak.
+            if (isDue && card.LastTypingPassDate != today && attemptsToday == 0)
             {
                 card.ConsecutiveTypingPasses++;
-                card.LastTypingPassDate = today;
                 counted = true;
             }
+            card.LastTypingPassDate = today;
+            card.SameDayTypingAttempts = 0;
+            card.LastFailedTypingDate = null;
         }
         else
         {
-            card.MistakeCount++;
-            card.ConsecutiveTypingPasses = 0;
-            card.LastTypingPassDate = today;
+            // Near miss = right meaning, wrong phrase: count the attempt but keep the streak.
+            if (!nearMiss)
+            {
+                card.MistakeCount++;
+                card.ConsecutiveTypingPasses = 0;
+                // Leave today's random queue (the explicit "Gõ lại" button still resubmits this card),
+                // so a hard fail is not re-served immediately by /typing/next.
+                card.LastTypingPassDate = today;
+            }
+            card.SameDayTypingAttempts = attemptsToday + 1;
+            card.LastFailedTypingDate = today;
         }
 
         bool mastered = false;
@@ -338,13 +375,21 @@ public class TypingController : ControllerBase
         }
 
         int intervalDays = GetIntervalDays(card.ConsecutiveTypingPasses);
-        card.NextReviewDate = DateTime.UtcNow.AddDays(intervalDays);
+        int attemptsUsedToday = card.SameDayTypingAttempts;
+        int remainingRetries = passed ? 0 : Math.Max(0, MaxAttemptsPerDay - attemptsUsedToday);
+        bool retryAllowed = !passed && remainingRetries > 0;
+
+        // A near miss does not move the schedule: the card stays in today's queue for the retry.
+        if (passed || !nearMiss)
+            card.NextReviewDate = DateTime.UtcNow.AddDays(intervalDays);
 
         await _db.SaveChangesAsync();
-        await _logs.LogActivityAsync(cards: 1);
+        // Retries in the same session are the same card, so only the first attempt counts toward the daily log.
+        if (!retried) await _logs.LogActivityAsync(cards: 1);
 
-        return new TypingResultDto(passed, Math.Round(sim, 3), card.Term, card.MeaningVi,
-            card.ConsecutiveTypingPasses, RequiredStreak, mastered, counted, intervalDays, card.MistakeCount);
+        return new TypingResultDto(passed, Math.Round(match.Similarity, 3), card.Term, card.MeaningVi,
+            card.ConsecutiveTypingPasses, RequiredStreak, mastered, counted, intervalDays, card.MistakeCount,
+            nearMiss, match.Alternative, retryAllowed, remainingRetries, retried);
     }
 }
 

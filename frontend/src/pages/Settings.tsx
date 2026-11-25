@@ -1,18 +1,57 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api } from '../lib/api';
-import { KeyRound, Save, Check, Target, Sliders } from 'lucide-react';
+import { KeyRound, Save, Check, Target, Sliders, RefreshCw, AlertTriangle } from 'lucide-react';
+
+interface AiModel {
+  id: string;
+  label: string;
+}
+
+// Offline fallback (backend /api/ai/models trả danh sách thật từ Google khi đã có key).
+const FALLBACK_MODELS: AiModel[] = [
+  { id: 'gemini-3.8-flash', label: 'Nhanh & thông minh nhất (khuyến nghị)' },
+  { id: 'gemini-3.6-flash', label: 'Bản ổn định thế hệ trước' },
+  { id: 'gemini-3.5-flash-lite', label: 'Rẻ & nhanh cho tác vụ nhẹ' },
+  { id: 'gemini-3.1-flash-lite', label: 'Tiết kiệm nhất' },
+  { id: 'gemini-3.1-pro-preview', label: 'Suy luận sâu (preview)' },
+];
 
 export default function Settings() {
   const [values, setValues] = useState<Record<string, string>>({});
   const [apiKey, setApiKey] = useState('');
   const [aiStatus, setAiStatus] = useState<{ configured: boolean; model: string } | null>(null);
+  const [models, setModels] = useState<AiModel[]>(FALLBACK_MODELS);
+  const [modelsFromApi, setModelsFromApi] = useState(false);
   const [msg, setMsg] = useState('');
   const [saving, setSaving] = useState(false);
+
+  const applyModels = useCallback((data: { fromApi: boolean; models: AiModel[] }) => {
+    if (data.models?.length) {
+      setModels(data.models);
+      setModelsFromApi(Boolean(data.fromApi));
+    } else {
+      setModels(FALLBACK_MODELS);
+      setModelsFromApi(false);
+    }
+  }, []);
+
+  const loadModels = useCallback(async () => {
+    try {
+      const r = await api.get<{ fromApi: boolean; models: AiModel[] }>('/ai/models');
+      applyModels(r.data);
+    } catch {
+      applyModels({ fromApi: false, models: FALLBACK_MODELS });
+    }
+  }, [applyModels]);
 
   useEffect(() => {
     api.get('/settings').then((r) => setValues(r.data)).catch(() => undefined);
     api.get('/ai/status').then((r) => setAiStatus(r.data)).catch(() => undefined);
-  }, []);
+    api
+      .get<{ fromApi: boolean; models: AiModel[] }>('/ai/models')
+      .then((r) => applyModels(r.data))
+      .catch(() => applyModels({ fromApi: false, models: FALLBACK_MODELS }));
+  }, [applyModels]);
 
   const save = async () => {
     setSaving(true);
@@ -25,6 +64,7 @@ export default function Settings() {
       setValues(r.data);
       const s = await api.get('/ai/status');
       setAiStatus(s.data);
+      await loadModels();
       setMsg('Đã lưu cấu hình thành công! ✅');
       setTimeout(() => setMsg(''), 3000);
     } catch {
@@ -33,6 +73,10 @@ export default function Settings() {
       setSaving(false);
     }
   };
+
+  const currentModel = values.GeminiModel ?? '';
+  const modelInList = models.some((m) => m.id === currentModel);
+  const modelMissing = Boolean(currentModel) && !modelInList;
 
   return (
     <div className="mx-auto max-w-xl space-y-4">
@@ -90,17 +134,44 @@ export default function Settings() {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
-              Mô hình AI (Model)
-            </label>
+            <div className="mb-1 flex items-center justify-between gap-2">
+              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">
+                Mô hình AI (Model)
+              </label>
+              <button
+                type="button"
+                onClick={() => void loadModels()}
+                title="Tải lại danh sách model từ Google"
+                className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-semibold text-indigo-600 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-950/60"
+              >
+                <RefreshCw size={11} />
+                <span>{modelsFromApi ? 'Danh sách từ Google' : 'Tải lại'}</span>
+              </button>
+            </div>
             <select
-              value={values.GeminiModel ?? 'gemini-2.5-flash'}
+              value={currentModel || models[0]?.id || ''}
               onChange={(e) => setValues({ ...values, GeminiModel: e.target.value })}
               className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold shadow-xs focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800/80"
             >
-              <option value="gemini-2.5-flash">gemini-2.5-flash (Nhanh & thông minh nhất)</option>
-              <option value="gemini-1.5-flash">gemini-1.5-flash (Bản ổn định)</option>
+              {modelMissing && (
+                <option value={currentModel}>{currentModel} (không còn trong danh sách)</option>
+              )}
+              {models.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.id} — {m.label}
+                </option>
+              ))}
             </select>
+            {modelMissing ? (
+              <p className="mt-1.5 flex items-start gap-1.5 text-[11px] font-semibold text-rose-600 dark:text-rose-400">
+                <AlertTriangle size={12} className="mt-0.5 shrink-0" />
+                <span>Model đã lưu không còn trong danh sách (Google đã đổi/ngừng hỗ trợ). Chọn model mới rồi bấm Lưu cấu hình.</span>
+              </p>
+            ) : (
+              <p className="mt-1.5 text-[11px] text-slate-400 dark:text-slate-500">
+                Google đổi tên model khá thường xuyên — bấm biểu tượng tải lại để lấy danh sách mới nhất theo API key của bạn.
+              </p>
+            )}
           </div>
         </div>
       </div>

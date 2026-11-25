@@ -23,8 +23,36 @@ public record AiVocabItem(
     string MeaningVi,
     string ExampleSentence);
 
+public record AiModelInfo(string Id, string Label);
+
 public class GeminiService
 {
+    /// <summary>Model used when the learner has not chosen one (kept current with Gemini releases).</summary>
+    public const string DefaultModel = "gemini-3.8-flash";
+
+    /// <summary>Offline list shown when no key is set or the live model list cannot be fetched.</summary>
+    public static readonly IReadOnlyList<AiModelInfo> FallbackModels = new List<AiModelInfo>
+    {
+        new(DefaultModel, "Nhanh & thông minh nhất (khuyến nghị)"),
+        new("gemini-3.6-flash", "Bản ổn định thế hệ trước"),
+        new("gemini-3.5-flash-lite", "Rẻ & nhanh cho tác vụ nhẹ"),
+        new("gemini-3.1-flash-lite", "Tiết kiệm nhất"),
+        new("gemini-3.1-pro-preview", "Suy luận sâu (preview)"),
+    };
+
+    /// <summary>Model ids Google has retired/routed away; stored settings get moved to <see cref="DefaultModel"/>.</summary>
+    public static readonly IReadOnlySet<string> RetiredModels = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro",
+        "gemini-2.0-flash", "gemini-2.0-flash-lite",
+        "gemini-1.5-flash", "gemini-1.5-pro", "gemini-1.0-pro", "gemini-pro",
+        "gemini-3-pro-preview",
+    };
+
+    /// <summary>Non-chat endpoints that also advertise generateContent.</summary>
+    private static readonly string[] NonChatModelHints =
+        { "image", "imagen", "banana", "nano", "veo", "tts", "live", "audio", "transcribe", "embedding", "robotics", "omni", "deep-research", "computer-use", "guard", "lyria" };
+
     private readonly IHttpClientFactory _httpFactory;
     private readonly SettingsService _settings;
     private readonly ILogger<GeminiService> _logger;
@@ -39,8 +67,70 @@ public class GeminiService
     public async Task<(bool Configured, string Model, string ApiKey)> GetConfigAsync()
     {
         var key = (await _settings.GetAsync("GeminiApiKey")) ?? string.Empty;
-        var model = await _settings.GetAsync("GeminiModel") ?? "gemini-2.5-flash";
+        var model = await _settings.GetAsync("GeminiModel") ?? DefaultModel;
         return (!string.IsNullOrWhiteSpace(key), model, key);
+    }
+
+    /// <summary>
+    /// List text models available to the saved API key, straight from Google, so the picker
+    /// never goes stale when Gemini renames/retires models. Falls back to <see cref="FallbackModels"/>.
+    /// </summary>
+    public async Task<(bool FromApi, List<AiModelInfo> Models)> ListModelsAsync(CancellationToken ct = default)
+    {
+        var (configured, _, key) = await GetConfigAsync();
+        if (!configured) return (false, FallbackModels.ToList());
+
+        try
+        {
+            var client = _httpFactory.CreateClient("gemini");
+            string url = $"https://generativelanguage.googleapis.com/v1beta/models?pageSize=200&key={Uri.EscapeDataString(key)}";
+            using var resp = await client.GetAsync(url, ct);
+            if (!resp.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("Gemini model list failed: {Status}", resp.StatusCode);
+                return (false, FallbackModels.ToList());
+            }
+
+            using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
+            if (!doc.RootElement.TryGetProperty("models", out var arr) || arr.ValueKind != JsonValueKind.Array)
+                return (false, FallbackModels.ToList());
+
+            var ids = new List<string>();
+            var labels = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var m in arr.EnumerateArray())
+            {
+                string id = (m.TryGetProperty("name", out var n) ? n.GetString() ?? string.Empty : string.Empty)
+                    .Replace("models/", string.Empty, StringComparison.Ordinal);
+                if (!id.StartsWith("gemini", StringComparison.OrdinalIgnoreCase)) continue;
+                if (NonChatModelHints.Any(h => id.Contains(h, StringComparison.OrdinalIgnoreCase))) continue;
+
+                // Google keeps deprecated ids callable for a while; don't offer them as new choices.
+                if (RetiredModels.Contains(id)) continue;
+
+                bool canGenerate = m.TryGetProperty("supportedGenerationMethods", out var methods)
+                    && methods.EnumerateArray().Any(x => string.Equals(x.GetString(), "generateContent", StringComparison.OrdinalIgnoreCase));
+                if (!canGenerate) continue;
+
+                ids.Add(id);
+                labels[id] = m.TryGetProperty("displayName", out var dn) ? dn.GetString() ?? id : id;
+            }
+
+            if (ids.Count == 0) return (false, FallbackModels.ToList());
+
+            var preferred = FallbackModels.Select((m, i) => (m.Id, i)).ToDictionary(x => x.Id, x => x.i, StringComparer.OrdinalIgnoreCase);
+            var models = ids
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(id => preferred.TryGetValue(id, out var rank) ? rank : preferred.Count)
+                .ThenBy(id => id, StringComparer.OrdinalIgnoreCase)
+                .Select(id => new AiModelInfo(id, labels[id]))
+                .ToList();
+            return (true, models);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Gemini model list request failed.");
+            return (false, FallbackModels.ToList());
+        }
     }
 
     public async Task<AiSentenceResult> EvaluateSentenceAsync(string userEn, string targetEn, string contextVi, CancellationToken ct = default)
@@ -67,7 +157,7 @@ public class GeminiService
               "feedback": "<2-3 concise sentences, may include Vietnamese>", 
               "casualVersions": ["<v1>", "<v2>"], "professionalVersions": ["<v1>", "<v2>"]}
             """;
-        var json = await GenerateAsync(model, key, prompt, ct);
+        var json = await GenerateWithFallbackAsync(model, key, prompt, ct);
         var doc = JsonDocument.Parse(StripFences(json));
         var r = doc.RootElement;
         return new AiSentenceResult(
@@ -93,7 +183,7 @@ public class GeminiService
               "vocabulary": [{"term": "<key word/phrase>", "meaningVi": "<nghĩa tiếng Việt>", "exampleSentence": "<short example>"}]}
             Include 3-5 vocabulary items max.
             """;
-        var json = await GenerateAsync(model, key, prompt, ct);
+        var json = await GenerateWithFallbackAsync(model, key, prompt, ct);
         var doc = JsonDocument.Parse(StripFences(json));
         var r = doc.RootElement;
         var vocab = r.GetProperty("vocabulary").EnumerateArray()
@@ -189,29 +279,162 @@ public class GeminiService
         return doc.RootElement.GetProperty("responseData").GetProperty("translatedText").GetString() ?? text;
     }
 
+    private const int MaxGenerateAttempts = 3;
+    private const int DefaultOutputTokens = 2048;
+    private const int RetryOutputTokens = 8192;
+
+    /// <summary>Stable model used when the chosen one is overloaded/unreachable.</summary>
+    public const string FallbackModel = "gemini-3.6-flash";
+
+    /// <summary>Thrown when Gemini is temporarily unavailable (429/5xx/timeout) so a fallback model can take over.</summary>
+    public class GeminiUnavailableException : Exception
+    {
+        public GeminiUnavailableException(string message, Exception? inner = null) : base(message, inner) { }
+    }
+
+    /// <summary>Models that rejected <c>thinkingConfig.thinkingLevel</c> (cached after the first 400).</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, bool> ThinkingLevelRejected =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Gemini 3+ models think by default (medium) and <b>thought tokens count toward maxOutputTokens</b>.
+    /// With a small cap that truncated our JSON answers and made calls slow; ask for "low" thinking
+    /// on 3.x/4.x and disable it (<c>thinkingBudget: 0</c>) on 2.5 models.
+    /// </summary>
+    private static Dictionary<string, object>? ThinkingConfigFor(string model)
+    {
+        if (model.StartsWith("gemini-2", StringComparison.OrdinalIgnoreCase))
+            return new Dictionary<string, object> { ["thinkingBudget"] = 0 };
+        if (ThinkingLevelRejected.TryGetValue(model, out var rejected) && rejected) return null;
+        return new Dictionary<string, object> { ["thinkingLevel"] = "low" };
+    }
+
+    private static string BuildPayload(string prompt, Dictionary<string, object>? thinkingConfig, int maxOutputTokens)
+    {
+        var generationConfig = new Dictionary<string, object>
+        {
+            // Thought tokens + the JSON answer share this budget.
+            ["maxOutputTokens"] = maxOutputTokens,
+            ["temperature"] = 0.4,
+        };
+        if (thinkingConfig is not null) generationConfig["thinkingConfig"] = thinkingConfig;
+        return JsonSerializer.Serialize(new
+        {
+            contents = new[] { new { parts = new[] { new { text = prompt } } } },
+            generationConfig
+        });
+    }
+
     private async Task<string> GenerateAsync(string model, string apiKey, string prompt, CancellationToken ct)
     {
         var client = _httpFactory.CreateClient("gemini");
         string url = $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={apiKey}";
-        var body = new
+        var thinkingConfig = ThinkingConfigFor(model);
+        int attempt = 0;
+        int maxOutputTokens = DefaultOutputTokens;
+        bool grownForTruncation = false;
+
+        // Retries: 429/5xx are transient ("high demand"). A rejected thinkingConfig is retried
+        // once without it and remembered, so older/edge models keep working.
+        while (true)
         {
-            contents = new[] { new { parts = new[] { new { text = prompt } } } },
-            generationConfig = new { temperature = 0.4, maxOutputTokens = 1024 }
-        };
-        using var resp = await client.PostAsync(url,
-            new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json"), ct);
-        string raw = await resp.Content.ReadAsStringAsync(ct);
-        if (!resp.IsSuccessStatusCode)
-        {
-            _logger.LogWarning("Gemini call failed: {Status} {Body}", resp.StatusCode, raw);
-            throw new InvalidOperationException($"Gemini API error ({(int)resp.StatusCode}). Check your API key/model.");
+            attempt++;
+            string raw;
+            System.Net.HttpStatusCode status;
+            try
+            {
+                using var resp = await client.PostAsync(url,
+                    new StringContent(BuildPayload(prompt, thinkingConfig, maxOutputTokens), Encoding.UTF8, "application/json"), ct);
+                status = resp.StatusCode;
+                raw = await resp.Content.ReadAsStringAsync(ct);
+            }
+            catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
+            {
+                // HttpClient timeout: treat as "model too slow/overloaded" so the caller can fall back.
+                _logger.LogWarning("Gemini call timed out after {Model}.", model);
+                throw new GeminiUnavailableException("Gemini request timed out.", ex);
+            }
+
+            if ((int)status is >= 200 and < 300)
+            {
+                using var doc = JsonDocument.Parse(raw);
+                var candidate = doc.RootElement.GetProperty("candidates")[0];
+                string finish = candidate.TryGetProperty("finishReason", out var fr) ? fr.GetString() ?? "" : "";
+                string? answer = null;
+                if (candidate.TryGetProperty("content", out var content)
+                    && content.TryGetProperty("parts", out var parts)
+                    && parts.GetArrayLength() > 0
+                    && parts[0].TryGetProperty("text", out var textEl))
+                {
+                    answer = textEl.GetString();
+                }
+                bool hasText = answer is not null;
+
+                if (finish == "MAX_TOKENS" && !grownForTruncation)
+                {
+                    // Thoughts ate the budget before the answer was complete — retry once with more room.
+                    _logger.LogWarning("{Model} hit MAX_TOKENS at {Cap}, retrying with {Next}.",
+                        model, maxOutputTokens, RetryOutputTokens);
+                    maxOutputTokens = RetryOutputTokens;
+                    grownForTruncation = true;
+                    attempt--;
+                    continue;
+                }
+
+                if (!hasText)
+                {
+                    _logger.LogWarning("{Model} returned no text (finishReason={Finish}).", model, finish);
+                    throw new GeminiUnavailableException($"Gemini returned no text (finishReason: {finish}).");
+                }
+                if (finish == "MAX_TOKENS")
+                    _logger.LogWarning("{Model} answer truncated at {Cap} tokens.", model, maxOutputTokens);
+
+                return answer!;
+            }
+
+            if (status == System.Net.HttpStatusCode.BadRequest
+                && thinkingConfig is not null
+                && raw.Contains("thinking", StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.LogWarning("{Model} rejected thinkingConfig, retrying without it.", model);
+                ThinkingLevelRejected[model] = true;
+                thinkingConfig = null;
+                attempt--;
+                continue;
+            }
+
+            bool transient = status is System.Net.HttpStatusCode.TooManyRequests
+                or System.Net.HttpStatusCode.InternalServerError
+                or System.Net.HttpStatusCode.BadGateway
+                or System.Net.HttpStatusCode.ServiceUnavailable
+                or System.Net.HttpStatusCode.GatewayTimeout;
+            _logger.LogWarning("Gemini call failed ({Attempt}/{MaxAttempts}): {Status} {Body}",
+                attempt, MaxGenerateAttempts, status, raw);
+
+            if (transient && attempt < MaxGenerateAttempts)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(Math.Pow(2, attempt - 1)), ct);
+                continue;
+            }
+            if (transient)
+                throw new GeminiUnavailableException($"Gemini API error ({(int)status}).");
+            throw new InvalidOperationException($"Gemini API error ({(int)status}). Check your API key/model.");
         }
-        using var doc = JsonDocument.Parse(raw);
-        return doc.RootElement
-            .GetProperty("candidates")[0]
-            .GetProperty("content")
-            .GetProperty("parts")[0]
-            .GetProperty("text").GetString() ?? "{}";
+    }
+
+    /// <summary>Generate with the chosen model, falling back to <see cref="FallbackModel"/> when it is overloaded.</summary>
+    private async Task<string> GenerateWithFallbackAsync(string model, string apiKey, string prompt, CancellationToken ct)
+    {
+        try
+        {
+            return await GenerateAsync(model, apiKey, prompt, ct);
+        }
+        catch (GeminiUnavailableException ex) when (!string.Equals(model, FallbackModel, StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogWarning("{Model} unavailable ({Reason}); falling back to {Fallback}.",
+                model, ex.Message, FallbackModel);
+            return await GenerateAsync(FallbackModel, apiKey, prompt, ct);
+        }
     }
 
     private static string StripFences(string s)
