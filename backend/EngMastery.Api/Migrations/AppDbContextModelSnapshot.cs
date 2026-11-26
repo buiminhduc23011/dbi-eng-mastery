@@ -183,6 +183,9 @@ namespace EngMastery.Api.Migrations
                     b.Property<int>("Repetition")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int>("SameDayAttemptCap")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int>("SameDayTypingAttempts")
                         .HasColumnType("INTEGER");
 

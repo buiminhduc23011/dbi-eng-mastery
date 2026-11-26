@@ -88,7 +88,7 @@ Input is normalized (case, whitespace, punctuation, apostrophes) and compared wi
 
 `VocabCards.AltTermsJson` lists accepted paraphrases for a card (seeded from `DataSeeder.AltTerms.cs`). A paraphrase match is a **near miss**: right meaning, wrong target phrase — it does not raise `MistakeCount` and does not reset the streak, but it never earns streak credit and the card stays in today's queue.
 
-The streak advances only on the first passing attempt of a due card on a new day. Each card allows 3 attempts per day (`SameDayTypingAttempts`), so a slip can be retried in the same session instead of waiting until tomorrow.
+The streak advances only on the first passing attempt of a due card on a new day. A miss does not end the day automatically: the daily attempt budget depends on the reflex level when the first miss happens (`SameDayAttemptCap`) — level 0–1 → 3 attempts, level 2 → 2 attempts, level 3+ → a single shot. A failed card is never re-asked immediately (the answer was just on screen); the client re-queues it and serves it again after 3 other cards. The level survives mid-day retries — a correct retry keeps it without adding a level — and only spending the whole budget without a pass drops it to level 0 and hides the card until tomorrow.
 
 ## SM-2 details
 

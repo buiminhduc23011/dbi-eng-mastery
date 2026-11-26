@@ -215,8 +215,21 @@ public class TypingController : ControllerBase
 {
     private const int RequiredStreak = 5;
 
-    /// <summary>Attempts allowed per card per day: the first try + 2 in-session retries.</summary>
-    private const int MaxAttemptsPerDay = 3;
+    /// <summary>
+    /// Retry budget by reflex level (streak at the start of the day's first attempt):
+    /// level 0–1 → 3 attempts, level 2 → 2 attempts, level 3+ → a single shot.
+    /// </summary>
+    private static int MaxAttemptsForLevel(int level) => level switch
+    {
+        <= 1 => 3,
+        2 => 2,
+        _ => 1,
+    };
+
+    /// <summary>True once the card has burned today's attempt budget — hide it until tomorrow.</summary>
+    private static bool ExhaustedToday(VocabCard card, DateOnly today) =>
+        card.LastFailedTypingDate == today && card.SameDayAttemptCap > 0 &&
+        card.SameDayTypingAttempts >= card.SameDayAttemptCap;
 
     private readonly AppDbContext _db;
     private readonly StudyLogService _logs;
@@ -252,9 +265,14 @@ public class TypingController : ControllerBase
     ///   they show up more often but no longer block all other cards.
     /// - Otherwise serve due cards (interval elapsed), or rotate random learned cards for free practice.
     /// - mode=mistakes stays strict: only mistake cards (explicit review tab).
+    /// - exclude=1,2,3 skips cards the client is already holding back to re-ask after a gap.
+    /// - Cards that burned today's attempt budget are hidden until tomorrow.
     /// </summary>
     [HttpGet("next")]
-    public async Task<ActionResult<CardDto>> Next([FromQuery] string? category = null, [FromQuery] string? mode = null)
+    public async Task<ActionResult<CardDto>> Next(
+        [FromQuery] string? category = null,
+        [FromQuery] string? mode = null,
+        [FromQuery] string? exclude = null)
     {
         bool mistakesOnly = string.Equals(mode, "mistakes", StringComparison.OrdinalIgnoreCase);
         var today = StudyLogService.TodayUtc();
@@ -264,7 +282,19 @@ public class TypingController : ControllerBase
         if (mistakesOnly)
             q = q.Where(c => c.MistakeCount > 0);
 
-        var allCards = await q.ToListAsync();
+        if (!string.IsNullOrWhiteSpace(exclude))
+        {
+            var excludeIds = exclude
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(s => int.TryParse(s, out var id) ? id : 0)
+                .Where(id => id > 0)
+                .ToHashSet();
+            if (excludeIds.Count > 0) q = q.Where(c => !excludeIds.Contains(c.Id));
+        }
+
+        var allCards = (await q.ToListAsync())
+            .Where(c => !ExhaustedToday(c, today))
+            .ToList();
         if (allCards.Count == 0)
         {
             if (mistakesOnly)
@@ -300,13 +330,15 @@ public class TypingController : ControllerBase
         return DtoMapper.ToDto(randomCard);
     }
 
-    /// <summary>Count of mistake-only cards (MistakeCount &gt; 0).</summary>
+    /// <summary>Count of mistake-only cards (MistakeCount &gt; 0) that haven't burned today's attempts.</summary>
     [HttpGet("mistakes/count")]
     public async Task<ActionResult<object>> MistakesCount([FromQuery] string? category = null)
     {
+        var today = StudyLogService.TodayUtc();
         var q = _db.VocabCards.Where(c => c.MistakeCount > 0);
         if (!string.IsNullOrWhiteSpace(category)) q = q.Where(c => c.Category == category);
-        return Ok(new { count = await q.CountAsync() });
+        var cards = await q.ToListAsync();
+        return Ok(new { count = cards.Count(c => !ExhaustedToday(c, today)) });
     }
 
     /// <summary>
@@ -314,8 +346,11 @@ public class TypingController : ControllerBase
     /// - Exact target term (fuzzy) = pass; only a genuinely due card on a new day increments the streak (+1).
     /// - Accepted paraphrase (card.AltTermsJson) = "near miss": right meaning, wrong target phrase.
     ///   It is not penalised (no mistake, streak kept) but it never advances the streak.
-    /// - A non-passing attempt can be retried in the same session (capped per day) so a slip does not
-    ///   cost a whole day; only the first attempt of the day can advance the streak.
+    /// - The day's attempt budget depends on the card's reflex level when the first miss happens
+    ///   (3 at level 0–1, 2 at level 2, 1 at level 3+). The failed card is re-queued by the client
+    ///   after a few other cards, so the answer is not on screen while retyping.
+    ///   A mid-retry miss keeps the level; spending the whole budget without passing drops it to 0.
+    ///   Only the first attempt of the day can advance the streak.
     /// </summary>
     [HttpPost("{id}/submit")]
     public async Task<ActionResult<TypingResultDto>> Submit(int id, [FromBody] TypingSubmitDto dto)
@@ -334,6 +369,11 @@ public class TypingController : ControllerBase
 
         // Attempts that did not pass earlier today (reset on a new day or after a pass).
         int attemptsToday = card.LastFailedTypingDate == today ? card.SameDayTypingAttempts : 0;
+        // Freeze the day's budget on the first miss so a later attempt still uses the same cap
+        // (needed once the final miss drops the streak to 0, and for legacy rows without a cap).
+        int dailyCap = card.LastFailedTypingDate == today && card.SameDayAttemptCap > 0
+            ? card.SameDayAttemptCap
+            : MaxAttemptsForLevel(card.ConsecutiveTypingPasses);
         bool retried = attemptsToday > 0;
 
         bool counted = false;
@@ -350,6 +390,7 @@ public class TypingController : ControllerBase
             }
             card.LastTypingPassDate = today;
             card.SameDayTypingAttempts = 0;
+            card.SameDayAttemptCap = 0;
             card.LastFailedTypingDate = null;
         }
         else
@@ -358,13 +399,16 @@ public class TypingController : ControllerBase
             if (!nearMiss)
             {
                 card.MistakeCount++;
-                card.ConsecutiveTypingPasses = 0;
-                // Leave today's random queue (the explicit "Gõ lại" button still resubmits this card),
+                // Leave today's random queue (the client re-queues it after a gap via /cards/{id}),
                 // so a hard fail is not re-served immediately by /typing/next.
                 card.LastTypingPassDate = today;
             }
+            if (attemptsToday == 0) card.SameDayAttemptCap = dailyCap;
             card.SameDayTypingAttempts = attemptsToday + 1;
             card.LastFailedTypingDate = today;
+            // The reflex level survives mid-day retries; only burning the whole budget drops it to 0.
+            if (!nearMiss && card.SameDayTypingAttempts >= dailyCap)
+                card.ConsecutiveTypingPasses = 0;
         }
 
         bool mastered = false;
@@ -376,7 +420,7 @@ public class TypingController : ControllerBase
 
         int intervalDays = GetIntervalDays(card.ConsecutiveTypingPasses);
         int attemptsUsedToday = card.SameDayTypingAttempts;
-        int remainingRetries = passed ? 0 : Math.Max(0, MaxAttemptsPerDay - attemptsUsedToday);
+        int remainingRetries = passed ? 0 : Math.Max(0, dailyCap - attemptsUsedToday);
         bool retryAllowed = !passed && remainingRetries > 0;
 
         // A near miss does not move the schedule: the card stays in today's queue for the retry.

@@ -44,6 +44,11 @@ public class VocabCard
     // Typing-practice retry cap: attempts that did not pass (wrong or near miss) today.
     public DateOnly? LastFailedTypingDate { get; set; }
     public int SameDayTypingAttempts { get; set; } = 0;
+    /// <summary>
+    /// Attempts allowed for today, locked in when the day's first miss happens (0 = not set yet).
+    /// Needed because a miss resets ConsecutiveTypingPasses, which is what the budget is derived from.
+    /// </summary>
+    public int SameDayAttemptCap { get; set; } = 0;
 }
 
 public class SentenceDrill

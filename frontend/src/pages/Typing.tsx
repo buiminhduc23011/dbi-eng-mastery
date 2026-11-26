@@ -17,7 +17,7 @@ interface TypingResult {
   /** Đúng nghĩa nhưng khác cụm mục tiêu (khớp một cách diễn đạt tương đương). */
   nearMiss?: boolean;
   matchedAlternative?: string | null;
-  /** Còn được gõ lại trong phiên này không (tối đa 3 lượt/thẻ/ngày). */
+  /** Còn lượt hỏi lại hôm nay không (ngân sách theo cấp: 3/2/1 lượt). */
   retryAllowed?: boolean;
   remainingRetries?: number;
   /** Lượt đúng này đến sau khi đã gõ sai/near-miss trong ngày. */
@@ -30,6 +30,18 @@ interface Props {
 
 type TypingMode = 'all' | 'mistakes';
 
+/** Số thẻ khác phải đi qua trước khi từ gõ sai được hỏi lại. */
+const REQUEUE_GAP = 3;
+
+interface DelayedCard {
+  id: number;
+  /** Số thẻ nữa thì được hỏi lại (0 = tới lượt). */
+  remaining: number;
+}
+
+/** Ngân sách lượt/ngày theo cấp phản xạ — khớp với backend. */
+const maxAttemptsForLevel = (level: number) => (level <= 1 ? 3 : level === 2 ? 2 : 1);
+
 export default function Typing({ onWordMastered }: Props) {
   const [category, setCategory] = useState('');
   const [mode, setMode] = useState<TypingMode>('all');
@@ -40,10 +52,12 @@ export default function Typing({ onWordMastered }: Props) {
   const [empty, setEmpty] = useState('');
   const [loading, setLoading] = useState(false);
   const [mistakesCount, setMistakesCount] = useState(0);
+  const [pendingCount, setPendingCount] = useState(0);
   const [autoSpeak, setAutoSpeak] = useState(() => localStorage.getItem('typing:autoSpeak') !== '0');
   const nextBtnRef = useRef<HTMLButtonElement>(null);
-  const retryBtnRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  // Hàng chờ trong phiên: từ gõ sai chưa được hỏi lại ngay (tránh chép đáp án trên màn hình).
+  const delayedRef = useRef<DelayedCard[]>([]);
 
   useEffect(() => () => stopSpeak(), []);
 
@@ -56,10 +70,15 @@ export default function Typing({ onWordMastered }: Props) {
     });
   };
 
-  // Auto focus: ưu tiên "Gõ lại" khi còn lượt, rồi tới "Từ tiếp theo", còn lại là ô nhập.
+  // Đổi chủ đề / chế độ thì bỏ hàng chờ để không hỏi lại thẻ ngoài bộ lọc.
+  const clearDelayed = () => {
+    delayedRef.current = [];
+    setPendingCount(0);
+  };
+
+  // Auto focus: đang gõ thì vào ô nhập, có kết quả thì vào "Từ tiếp theo".
   useEffect(() => {
     if (!result) inputRef.current?.focus();
-    else if (result.retryAllowed) retryBtnRef.current?.focus();
     else nextBtnRef.current?.focus();
   }, [result]);
 
@@ -77,10 +96,47 @@ export default function Typing({ onWordMastered }: Props) {
     setLoading(true);
     setEmpty('');
     try {
+      const delayed = delayedRef.current;
+
+      // 1) Tới lượt một từ đã gõ sai từ vài thẻ trước → hỏi lại đúng thẻ đó.
+      const readyIndex = delayed.findIndex((d) => d.remaining <= 0);
+      if (readyIndex >= 0) {
+        const [due] = delayed.splice(readyIndex, 1);
+        setPendingCount(delayed.length);
+        const r = await api.get<VocabCard>(`/cards/${due.id}`);
+        setCard(r.data);
+        setInput('');
+        setResult(null);
+        return;
+      }
+
+      // 2) Chưa tới lượt → đi qua một thẻ khác và giảm thời gian chờ.
+      delayed.forEach((d) => {
+        if (d.remaining > 0) d.remaining -= 1;
+      });
+
       const params: Record<string, string> = {};
       if (cat) params.category = cat;
       if (m === 'mistakes') params.mode = 'mistakes';
-      const r = await api.get<VocabCard>('/typing/next', { params });
+      if (delayed.length > 0) params.exclude = delayed.map((d) => d.id).join(',');
+
+      let r;
+      try {
+        r = await api.get<VocabCard>('/typing/next', { params });
+      } catch (err) {
+        // Không còn thẻ nào khác (hoặc chỉ còn đúng thẻ đang chờ) → chấp nhận hỏi lại sớm.
+        if (delayed.length === 0) throw err;
+        const fallback: Record<string, string> = { ...params };
+        delete fallback.exclude;
+        r = await api.get<VocabCard>('/typing/next', { params: fallback });
+      }
+
+      // Phòng khi server vẫn trả về thẻ đang chờ: bỏ khỏi hàng chờ để không hỏi trùng.
+      if (delayed.some((d) => d.id === r.data.id)) {
+        delayedRef.current = delayed.filter((d) => d.id !== r.data.id);
+        setPendingCount(delayedRef.current.length);
+      }
+
       setCard(r.data);
       setInput('');
       setResult(null);
@@ -108,6 +164,18 @@ export default function Typing({ onWordMastered }: Props) {
     try {
       const r = await api.post<TypingResult>(`/typing/${card.id}/submit`, { userInput: input });
       setResult(r.data);
+
+      // Sai (hoặc near-miss) mà còn lượt → đẩy thẻ vào hàng chờ, hỏi lại sau vài thẻ khác.
+      // Hết lượt thì thôi: thẻ đã về cấp 0 và hẹn gặp lại vào ngày mai.
+      if (!r.data.passed && r.data.retryAllowed) {
+        if (!delayedRef.current.some((d) => d.id === card.id)) {
+          delayedRef.current.push({ id: card.id, remaining: REQUEUE_GAP });
+        }
+      } else {
+        delayedRef.current = delayedRef.current.filter((d) => d.id !== card.id);
+      }
+      setPendingCount(delayedRef.current.length);
+
       if (autoSpeak) {
         speak(r.data.correctTerm);
       }
@@ -120,13 +188,7 @@ export default function Typing({ onWordMastered }: Props) {
     }
   };
 
-  // Gõ lại ngay trên cùng thẻ (không nhảy sang từ khác). Chỉ lượt đúng ĐẦU TIÊN trong ngày mới cộng chuỗi.
-  const retry = useCallback(() => {
-    setResult(null);
-    setInput('');
-  }, []);
-
-  // Keyboard shortcuts: R = nghe lại đáp án, T = gõ lại, Enter = từ tiếp theo (chỉ khi đã có kết quả).
+  // Keyboard shortcuts: R = nghe lại đáp án, Enter = từ tiếp theo (chỉ khi đã có kết quả).
   // Khi đang gõ (chưa có result) thì không chặn phím R để vẫn gõ chữ "r" bình thường.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -137,19 +199,16 @@ export default function Typing({ onWordMastered }: Props) {
       if (e.key === 'r' || e.key === 'R') {
         e.preventDefault();
         speak(result.correctTerm);
-      } else if ((e.key === 't' || e.key === 'T') && result.retryAllowed) {
-        e.preventDefault();
-        retry();
       } else if (e.key === 'Enter') {
         // Nếu nút đang focus thì để click mặc định xử lý, tránh gọi 2 lần.
-        if (document.activeElement === nextBtnRef.current || document.activeElement === retryBtnRef.current) return;
+        if (document.activeElement === nextBtnRef.current) return;
         e.preventDefault();
         void loadNext(category, mode);
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [result, category, mode, loadNext, retry]);
+  }, [result, category, mode, loadNext]);
 
   const streakDots = (streak: number, required = 5) => (
     <div className="flex items-center gap-1.5">
@@ -179,11 +238,19 @@ export default function Typing({ onWordMastered }: Props) {
           <Keyboard size={20} className="text-indigo-600 dark:text-indigo-400" />
           Luyện gõ từ vựng
         </h2>
-        {mistakesCount > 0 && (
-          <span className="rounded-full bg-rose-100 px-2.5 py-1 text-[11px] font-bold text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">
-            {mistakesCount} từ gõ sai cần ôn
-          </span>
-        )}
+        <div className="flex flex-wrap items-center justify-end gap-1.5">
+          {pendingCount > 0 && (
+            <span className="flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-bold text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">
+              <RotateCcw size={11} />
+              {pendingCount} từ chờ hỏi lại
+            </span>
+          )}
+          {mistakesCount > 0 && (
+            <span className="rounded-full bg-rose-100 px-2.5 py-1 text-[11px] font-bold text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">
+              {mistakesCount} từ gõ sai cần ôn
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Filter and Next */}
@@ -193,6 +260,7 @@ export default function Typing({ onWordMastered }: Props) {
             value={category}
             onChange={(e) => {
               setCategory(e.target.value);
+              clearDelayed();
               void loadMistakesCount(e.target.value);
               void loadNext(e.target.value, mode);
             }}
@@ -210,6 +278,7 @@ export default function Typing({ onWordMastered }: Props) {
             <button
               onClick={() => {
                 setMode('all');
+                clearDelayed();
                 void loadNext(category, 'all');
               }}
               className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-all ${
@@ -223,6 +292,7 @@ export default function Typing({ onWordMastered }: Props) {
             <button
               onClick={() => {
                 setMode('mistakes');
+                clearDelayed();
                 void loadNext(category, 'mistakes');
               }}
               className={`flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-bold transition-all ${
@@ -348,6 +418,10 @@ export default function Typing({ onWordMastered }: Props) {
               <p className="text-center text-[11px] text-slate-400 dark:text-slate-500">
                 Gõ đúng nghĩa bằng cách nói khác vẫn được ghi nhận (không tính là gõ sai), nhưng chỉ đúng cụm mục tiêu mới cộng cấp độ.
               </p>
+              <p className="text-center text-[11px] text-slate-400 dark:text-slate-500">
+                Sai thì từ quay lại sau {REQUEUE_GAP} thẻ khác (không chép được đáp án). Cấp 1: {maxAttemptsForLevel(1)} lượt/ngày
+                · cấp 2: {maxAttemptsForLevel(2)} lượt · cấp 3–5: {maxAttemptsForLevel(3)} lượt.
+              </p>
               <button
                 onClick={check}
                 disabled={!input.trim()}
@@ -391,7 +465,7 @@ export default function Typing({ onWordMastered }: Props) {
                     {result.countedToday ? (
                       <span>Khoảng cách ôn tiếp theo: <b>sau {result.nextIntervalDays ?? (result.streak * 2)} ngày</b></span>
                     ) : result.retried ? (
-                      <span className="text-slate-500 dark:text-slate-400 italic">(Đúng sau khi gõ lại — chuỗi chỉ cộng ở lần gõ đầu tiên trong ngày)</span>
+                      <span className="text-slate-500 dark:text-slate-400 italic">(Đúng sau khi gõ lại — không cộng cấp, cấp hiện tại được giữ nguyên)</span>
                     ) : (
                       <span className="text-slate-500 dark:text-slate-400 italic">(Lượt luyện xoay vòng — không cộng dồn ngày)</span>
                     )}
@@ -407,7 +481,10 @@ export default function Typing({ onWordMastered }: Props) {
                     Bạn gõ: &ldquo;{input}&rdquo;
                     {result.matchedAlternative && <> (khớp cách nói <b>&ldquo;{result.matchedAlternative}&rdquo;</b>)</>}
                     {' '}· Cụm mục tiêu là <span className="font-mono font-bold underline">{result.correctTerm}</span>.
-                    Lần này không bị tính là gõ sai và chuỗi giữ nguyên, nhưng cấp độ chỉ cộng ở lần gõ đúng đầu tiên trong ngày — gõ lại để qua thẻ này ngay.
+                    Lần này không bị tính là gõ sai và chuỗi giữ nguyên, nhưng cấp độ chỉ cộng ở lần gõ đúng đầu tiên trong ngày.
+                    {result.retryAllowed
+                      ? ` Từ này sẽ quay lại sau ${REQUEUE_GAP} thẻ nữa.`
+                      : ' Đã hết lượt thử hôm nay.'}
                   </div>
                 </div>
               ) : (
@@ -419,8 +496,8 @@ export default function Typing({ onWordMastered }: Props) {
                   <div className="text-xs text-rose-700 dark:text-rose-300">
                     Bạn gõ: &ldquo;{input}&rdquo; · Đã gõ sai từ này {result.mistakeCount ?? (card.mistakeCount + 1)} lần
                     {result.retryAllowed
-                      ? ` · Gõ lại ngay để nhớ đúng cụm (còn ${result.remainingRetries ?? 0} lượt thử hôm nay).`
-                      : ' · Chuỗi bị đặt lại về 0, sẽ hỏi lại vào ngày mai để củng cố.'}
+                      ? ` · Từ này quay lại sau ${REQUEUE_GAP} thẻ nữa (còn ${result.remainingRetries ?? 0} lượt thử hôm nay).`
+                      : ' · Đã hết lượt thử hôm nay — chuỗi về cấp 0, mai gặp lại để củng cố.'}
                   </div>
                 </div>
               )}
@@ -442,23 +519,14 @@ export default function Typing({ onWordMastered }: Props) {
                   <span>Nghe (R)</span>
                 </button>
                 {result.retryAllowed && (
-                  <button
-                    ref={retryBtnRef}
-                    onClick={retry}
-                    className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-amber-500 px-3 py-2.5 text-xs font-bold text-white shadow-md shadow-amber-500/25 transition hover:bg-amber-600 active:scale-95"
-                  >
-                    <RotateCcw size={15} />
-                    <span>Gõ lại ngay (T)</span>
-                  </button>
+                  <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-bold text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">
+                    còn {result.remainingRetries ?? 0} lượt thử hôm nay
+                  </span>
                 )}
                 <button
                   ref={nextBtnRef}
                   onClick={() => loadNext(category, mode)}
-                  className={
-                    result.retryAllowed
-                      ? 'flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white py-2.5 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-200'
-                      : 'flex flex-1 items-center justify-center gap-2 rounded-xl bg-indigo-600 py-2.5 text-xs font-bold text-white shadow-md shadow-indigo-600/25 transition hover:bg-indigo-700 active:scale-95'
-                  }
+                  className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-indigo-600 py-2.5 text-xs font-bold text-white shadow-md shadow-indigo-600/25 transition hover:bg-indigo-700 active:scale-95"
                 >
                   <span>Từ tiếp theo (Enter)</span>
                   <ArrowRight size={15} />
@@ -466,12 +534,6 @@ export default function Typing({ onWordMastered }: Props) {
               </div>
               <div className="mt-2 flex flex-wrap items-center justify-center gap-3 text-[11px] text-slate-400">
                 <span className="flex items-center gap-1"><kbd className="em-kbd">R</kbd> Nghe lại</span>
-                {result.retryAllowed && (
-                  <>
-                    <span>·</span>
-                    <span className="flex items-center gap-1"><kbd className="em-kbd">T</kbd> Gõ lại</span>
-                  </>
-                )}
                 <span>·</span>
                 <span className="flex items-center gap-1"><kbd className="em-kbd">Enter</kbd> Từ tiếp theo</span>
               </div>
