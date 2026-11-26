@@ -5,6 +5,30 @@ Gemini AI is strictly **on-demand** (manual buttons only) to minimize API quota 
 
 ## Features
 
+### Beginner-first upgrade (v3)
+
+- **Học hôm nay:** 12 guided foundation lessons / 36 practical sentences. Vietnamese explanations, meaning choices, cloze, word ordering, independent recall and optional speaking. A daily session adds up to two due warm-up sentences before a new lesson.
+- **No-pressure feedback:** hints and retries; independent recall is counted only when correct on the first attempt without a recall hint. Offline comparison is explicitly not a semantic or pronunciation assessment.
+- **Câu của tôi:** translate a personal thought, practise it through the same guided flow, then save it to the existing sentence-drill schedule. Find saved sentences under **Luyện câu → Câu của tôi**. Translation still needs a network connection; foundation lessons do not call AI.
+- **Personal notebook UI:** warm light/forest dark themes, desktop sidebar, mobile quick navigation, visible keyboard focus and reduced-motion support. All previous study tools remain accessible.
+- Foundation completion is stored server-side in dedicated `Learning.v1.lesson.*` settings, with no database schema changes. One completion per lesson per UTC day is credited; retries do not inflate activity. A poor independent-recall result returns tomorrow; successful repeat sessions space to 1/3/7/14 days. Existing card schedules are untouched.
+- A lesson is saved when **Lưu & hoàn thành buổi học** succeeds, not after each step. Leaving an unfinished lesson warns first. Microphone recognition is optional and depends on browser permissions/support; it is not a pronunciation score.
+
+**Data safety:** this upgrade does not reset, replace or reseed existing learner records. JSON export v2 adds study history and foundation progress without API credentials. Import is **add-missing only**: existing cards, drills, dates and lesson progress always win, including seeded records. It is not a full point-in-time restore. Before deploying, back up the actual database with a provider-appropriate consistent backup (SQLite backup API / stopped-service copy including committed WAL state, or SQL Server native backup). Keep the existing database path and volume unchanged. No production deployment is performed by the upgrade tests.
+
+Verification (Node 22.6+ and installed .NET SDK):
+
+```powershell
+dotnet build backend/EngMastery.Api
+node scripts/verify-learning-api.mjs
+cd frontend
+npm test
+npm run lint
+npm run build
+```
+
+The integration script creates temporary SQLite databases and uses port 8190; it refuses an occupied port. It never opens the learner database. `API_PROXY_TARGET` can point Vite to a separate test backend; the default remains `http://localhost:8090`. Browser smoke scenario: `frontend/tests/session.browser.js` (run only on an isolated instance, starting lesson 01).
+
 | Area | What it does | AI cost |
 |---|---|---|
 | **SRS Review** | True SM-2 engine (`Again/Hard/Good/Easy` → interval, EF ≥ 1.3). Flip-card 3D + Cloze fill-in modes, keyboard `Space/1-4/R`, TTS | 0 |

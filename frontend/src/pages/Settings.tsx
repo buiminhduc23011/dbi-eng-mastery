@@ -56,7 +56,9 @@ export default function Settings() {
   const save = async () => {
     setSaving(true);
     try {
-      const payload = { ...values };
+      const payload: Record<string, string> = {};
+      if (values.DailyTarget !== undefined) payload.DailyTarget = values.DailyTarget;
+      if (values.GeminiModel !== undefined) payload.GeminiModel = values.GeminiModel;
       if (apiKey && !apiKey.startsWith('***')) payload.GeminiApiKey = apiKey;
       await api.put('/settings', payload);
       setApiKey('');
@@ -79,12 +81,12 @@ export default function Settings() {
   const modelMissing = Boolean(currentModel) && !modelInList;
 
   return (
-    <div className="mx-auto max-w-xl space-y-4">
+    <div className="tool-page settings-workbench space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-base sm:text-lg font-bold flex items-center gap-2">
           <Sliders size={18} className="text-indigo-600 dark:text-indigo-400" />
-          Cài đặt hệ thống
+          Tùy chỉnh việc học
         </h2>
       </div>
 
@@ -125,6 +127,7 @@ export default function Settings() {
               API Key
             </label>
             <input
+              aria-label="Gemini API key"
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
               type="password"
@@ -149,6 +152,7 @@ export default function Settings() {
               </button>
             </div>
             <select
+              aria-label="Mô hình AI"
               value={currentModel || models[0]?.id || ''}
               onChange={(e) => setValues({ ...values, GeminiModel: e.target.value })}
               className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold shadow-xs focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800/80"
@@ -188,6 +192,7 @@ export default function Settings() {
             Số lượt ôn tập chỉ tiêu (Thẻ từ + Câu phản xạ)
           </label>
           <input
+            aria-label="Mục tiêu ôn tập mỗi ngày"
             value={values.DailyTarget ?? '20'}
             onChange={(e) => setValues({ ...values, DailyTarget: e.target.value })}
             type="number"

@@ -148,13 +148,9 @@ export default function DashboardPage({ go, onRefresh, onStudyLeech }: Props) {
   ];
 
   return (
-    <div className="space-y-4 sm:space-y-5">
+    <div className="tool-page dashboard-workbench space-y-6">
       {/* 1. Today's Command Center (Modern Sleek Hero) */}
       <div className="relative overflow-hidden rounded-2xl border border-slate-200/90 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800/80 dark:bg-[#111827]">
-        {/* Ambient Mesh Glow */}
-        <div className="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-indigo-500/10 blur-3xl dark:bg-indigo-500/15" />
-        <div className="pointer-events-none absolute -bottom-24 left-1/3 h-48 w-48 rounded-full bg-violet-500/10 blur-3xl dark:bg-violet-500/10" />
-
         <div className="relative z-10 flex flex-col justify-between gap-5 md:flex-row md:items-center">
           {/* Left info */}
           <div className="space-y-2.5 max-w-xl">
@@ -175,7 +171,7 @@ export default function DashboardPage({ go, onRefresh, onStudyLeech }: Props) {
               )}
             </div>
 
-            <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+            <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">
               {data.cardsDue > 0 ? (
                 <>
                   Bạn có <span className="text-indigo-600 dark:text-indigo-400">{data.cardsDue} thẻ</span> &{' '}
@@ -184,10 +180,10 @@ export default function DashboardPage({ go, onRefresh, onStudyLeech }: Props) {
               ) : (
                 <>Tất cả thẻ hôm nay đã hoàn thành! Tiếp tục luyện phản xạ.</>
               )}
-            </h1>
+            </h2>
 
             <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
-              Lịch ôn được tối ưu theo đường cong quên lãng Ebbinghaus. Hoàn thành phiên ôn tập giúp đưa từ vựng vào vùng trí nhớ dài hạn.
+              Ôn một ít mỗi ngày để nhớ lâu hơn. Bạn có thể bắt đầu bằng từ vựng hoặc luyện những câu đến lịch ôn.
             </p>
 
             {/* Daily Goal Mini Progress */}
@@ -201,7 +197,7 @@ export default function DashboardPage({ go, onRefresh, onStudyLeech }: Props) {
               </div>
               <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
                 <div
-                  className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500 transition-all duration-700"
+                  className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500 transition-[background-color,color,border-color,box-shadow,opacity,transform] duration-700"
                   style={{ width: `${progressPct}%` }}
                 />
               </div>
@@ -233,7 +229,7 @@ export default function DashboardPage({ go, onRefresh, onStudyLeech }: Props) {
                     strokeLinecap="round"
                     strokeDasharray={ringCircumference}
                     strokeDashoffset={ringOffset}
-                    className="transition-all duration-700"
+                    className="transition-[background-color,color,border-color,box-shadow,opacity,transform] duration-700"
                   />
                   <defs>
                     <linearGradient id="heroRingGrad" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -258,7 +254,7 @@ export default function DashboardPage({ go, onRefresh, onStudyLeech }: Props) {
               {data.cardsDue > 0 ? (
                 <button
                   onClick={() => go('review')}
-                  className="group flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-3 text-xs sm:text-sm font-bold text-white shadow-md shadow-indigo-600/25 transition-all hover:brightness-110 hover:-translate-y-0.5 active:scale-95"
+                  className="group flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-3 text-xs sm:text-sm font-bold text-white shadow-md shadow-indigo-600/25 transition-[background-color,color,border-color,box-shadow,opacity,transform] hover:brightness-110 hover:-translate-y-0.5 active:scale-95"
                 >
                   <span>Bắt đầu ôn tập ({data.cardsDue} thẻ)</span>
                   <ArrowRight size={15} className="transition-transform group-hover:translate-x-1" />
@@ -266,7 +262,7 @@ export default function DashboardPage({ go, onRefresh, onStudyLeech }: Props) {
               ) : (
                 <button
                   onClick={() => go('review')}
-                  className="group flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-xs sm:text-sm font-bold text-white shadow-sm transition-all hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 active:scale-95"
+                  className="group flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-xs sm:text-sm font-bold text-white shadow-sm transition-[background-color,color,border-color,box-shadow,opacity,transform] hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 active:scale-95"
                 >
                   <span>Ôn lại bộ thẻ</span>
                   <ArrowRight size={15} className="transition-transform group-hover:translate-x-1" />
@@ -276,7 +272,7 @@ export default function DashboardPage({ go, onRefresh, onStudyLeech }: Props) {
               {data.drillsDue > 0 && (
                 <button
                   onClick={() => go('drills')}
-                  className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs sm:text-sm font-semibold text-slate-700 shadow-sm transition-all hover:bg-slate-50 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-800/80 dark:text-slate-200 dark:hover:bg-slate-700/80 active:scale-95"
+                  className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs sm:text-sm font-semibold text-slate-700 shadow-sm transition-[background-color,color,border-color,box-shadow,opacity,transform] hover:bg-slate-50 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-800/80 dark:text-slate-200 dark:hover:bg-slate-700/80 active:scale-95"
                 >
                   <PenLine size={14} className="text-sky-500" />
                   <span>Luyện {data.drillsDue} câu phản xạ</span>
@@ -293,7 +289,10 @@ export default function DashboardPage({ go, onRefresh, onStudyLeech }: Props) {
           <div
             key={s.label}
             onClick={s.action}
-            className={`group rounded-xl border border-slate-200/80 bg-white p-3.5 sm:p-4 shadow-sm transition-all duration-200 hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900/80 dark:hover:border-slate-700 ${
+            role={s.action ? 'button' : undefined}
+            tabIndex={s.action ? 0 : undefined}
+            onKeyDown={e => { if (s.action && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); s.action(); } }}
+            className={`group rounded-xl border border-slate-200/80 bg-white p-3.5 sm:p-4 shadow-sm transition-[background-color,color,border-color,box-shadow,opacity,transform] duration-200 hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900/80 dark:hover:border-slate-700 ${
               s.action ? 'cursor-pointer active:scale-98' : ''
             }`}
           >
@@ -350,7 +349,7 @@ export default function DashboardPage({ go, onRefresh, onStudyLeech }: Props) {
                       {isToday ? 'Hôm nay' : f.date}: {f.count} thẻ
                     </div>
                     <span
-                      className={`font-mono text-[10px] font-bold transition-all ${
+                      className={`font-mono text-[10px] font-bold transition-[background-color,color,border-color,box-shadow,opacity,transform] ${
                         isToday
                           ? 'text-indigo-600 dark:text-indigo-400 scale-105'
                           : 'text-slate-500 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-white'
@@ -359,7 +358,7 @@ export default function DashboardPage({ go, onRefresh, onStudyLeech }: Props) {
                       {f.count}
                     </span>
                     <div
-                      className={`w-full rounded-t-lg transition-all duration-300 group-hover:brightness-110 ${
+                      className={`w-full rounded-t-lg transition-[background-color,color,border-color,box-shadow,opacity,transform] duration-300 group-hover:brightness-110 ${
                         isToday
                           ? 'bg-gradient-to-t from-indigo-600 to-violet-500 shadow-sm shadow-indigo-500/30'
                           : f.count > 0
@@ -440,7 +439,7 @@ export default function DashboardPage({ go, onRefresh, onStudyLeech }: Props) {
                     key={l.id}
                     onClick={() => onStudyLeech?.(l.id)}
                     title="Bấm để ôn ngay các từ hay sai"
-                    className="group flex cursor-pointer items-center justify-between rounded-xl border border-slate-100 bg-slate-50/70 p-2.5 transition-all hover:bg-indigo-50/80 hover:border-indigo-200 active:scale-98 dark:border-slate-800/60 dark:bg-slate-800/40 dark:hover:bg-slate-800/80 dark:hover:border-indigo-800/60"
+                    className="group flex cursor-pointer items-center justify-between rounded-xl border border-slate-100 bg-slate-50/70 p-2.5 transition-[background-color,color,border-color,box-shadow,opacity,transform] hover:bg-indigo-50/80 hover:border-indigo-200 active:scale-98 dark:border-slate-800/60 dark:bg-slate-800/40 dark:hover:bg-slate-800/80 dark:hover:border-indigo-800/60"
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
                       <button

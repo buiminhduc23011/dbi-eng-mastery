@@ -106,6 +106,13 @@ public class DrillsController : ControllerBase
     {
         if (string.IsNullOrWhiteSpace(dto.PromptVi) || string.IsNullOrWhiteSpace(dto.TargetEn))
             return BadRequest("PromptVi and TargetEn are required.");
+        // Personal practice may retry after a lost response; don't create another copy.
+        if (dto.Category == "My sentences")
+        {
+            var existing = await _db.SentenceDrills.FirstOrDefaultAsync(d =>
+                d.Category == dto.Category && d.PromptVi == dto.PromptVi && d.TargetEn == dto.TargetEn);
+            if (existing is not null) return Ok(DtoMapper.ToDto(existing));
+        }
         var d = new SentenceDrill
         {
             Category = string.IsNullOrWhiteSpace(dto.Category) ? "Daily & Casual" : dto.Category,
@@ -524,20 +531,47 @@ public class BackupController : ControllerBase
     {
         var cards = await _db.VocabCards.OrderBy(c => c.Id).ToListAsync();
         var drills = await _db.SentenceDrills.OrderBy(d => d.Id).ToListAsync();
-        return Ok(new { exportedAt = DateTime.UtcNow, cards, drills });
+        var studyLogs = await _db.StudyLogs.OrderBy(x => x.StudyDate).ToListAsync();
+        var learningProgress = await _db.AppSettings
+            .Where(x => x.Key.StartsWith(LearningController.Prefix))
+            .ToDictionaryAsync(x => x.Key, x => x.Value);
+        // Never export credentials. JSON supplements, but does not replace, full DB backups.
+        return Ok(new { version = 2, exportedAt = DateTime.UtcNow, cards, drills, studyLogs, learningProgress });
     }
 
     [HttpPost("import")]
     public async Task<ActionResult<object>> Import([FromBody] BackupPayload payload)
     {
-        int cardsAdded = 0, drillsAdded = 0;
+        int cardsAdded = 0, drillsAdded = 0, studyLogsAdded = 0, progressAdded = 0;
+        // Validate all new fields before writing any records.
+        if (payload.LearningProgress is not null)
+        {
+            foreach (var (key, value) in payload.LearningProgress)
+            {
+                if (!key.StartsWith(LearningController.Prefix) ||
+                    !LearningController.LessonIds.Contains(key[LearningController.Prefix.Length..]))
+                    return BadRequest(new { code = "invalid_progress", message = "Bản sao chứa mã bài học không hợp lệ." });
+                try
+                {
+                    var progress = JsonSerializer.Deserialize<LessonProgress>(value);
+                    if (progress is null || key != LearningController.Prefix + progress.LessonId ||
+                        progress.IndependentCount is < 0 or > 3 || progress.Completions < 1 ||
+                        !DateOnly.TryParseExact(progress.CompletedOn, "yyyy-MM-dd", out _) ||
+                        !DateOnly.TryParseExact(progress.NextReviewOn, "yyyy-MM-dd", out _))
+                        return BadRequest(new { code = "invalid_progress", message = "Tiến độ trong bản sao không hợp lệ." });
+                }
+                catch (Exception ex) when (ex is JsonException or ArgumentException)
+                { return BadRequest(new { code = "invalid_progress", message = "Không đọc được tiến độ trong bản sao." }); }
+            }
+        }
+        await using var transaction = await _db.Database.BeginTransactionAsync();
+        var cardTerms = (await _db.VocabCards.Select(c => c.Term).ToListAsync()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var drillKeys = (await _db.SentenceDrills.Select(d => d.PromptVi + "\n" + d.TargetEn).ToListAsync()).ToHashSet();
         if (payload.Cards is not null)
         {
             foreach (var c in payload.Cards)
             {
-                bool exists = !string.IsNullOrWhiteSpace(c.Term) &&
-                    await _db.VocabCards.AnyAsync(x => x.Term == c.Term);
-                if (exists) continue;
+                if (string.IsNullOrWhiteSpace(c.Term) || !cardTerms.Add(c.Term)) continue;
                 c.Id = 0;
                 _db.VocabCards.Add(c);
                 cardsAdded++;
@@ -547,19 +581,36 @@ public class BackupController : ControllerBase
         {
             foreach (var d in payload.Drills)
             {
-                bool exists = !string.IsNullOrWhiteSpace(d.PromptVi) &&
-                    await _db.SentenceDrills.AnyAsync(x => x.PromptVi == d.PromptVi && x.TargetEn == d.TargetEn);
-                if (exists) continue;
+                if (string.IsNullOrWhiteSpace(d.PromptVi) || string.IsNullOrWhiteSpace(d.TargetEn) ||
+                    !drillKeys.Add(d.PromptVi + "\n" + d.TargetEn)) continue;
                 d.Id = 0;
                 _db.SentenceDrills.Add(d);
                 drillsAdded++;
             }
         }
+        if (payload.StudyLogs is not null)
+        {
+            var dates = (await _db.StudyLogs.Select(x => x.StudyDate).ToListAsync()).ToHashSet();
+            foreach (var log in payload.StudyLogs)
+            {
+                // Existing days are never overwritten or summed: importing twice is safe.
+                if (!dates.Add(log.StudyDate)) continue;
+                if (log.CardsReviewed < 0 || log.DrillsCompleted < 0 || log.AiCallsUsed < 0 || log.StudyDurationSeconds < 0)
+                    return BadRequest(new { code = "invalid_study_log", message = "Lịch sử học không hợp lệ." });
+                log.Id = 0; _db.StudyLogs.Add(log); studyLogsAdded++;
+            }
+        }
+        if (payload.LearningProgress is not null)
+            foreach (var (key, value) in payload.LearningProgress)
+                if (await _db.AppSettings.FindAsync(key) is null)
+                { _db.AppSettings.Add(new AppSetting { Key = key, Value = value }); progressAdded++; }
         await _db.SaveChangesAsync();
-        return Ok(new { cardsAdded, drillsAdded });
+        await transaction.CommitAsync();
+        return Ok(new { cardsAdded, drillsAdded, studyLogsAdded, progressAdded });
     }
 
-    public record BackupPayload(List<VocabCard>? Cards, List<SentenceDrill>? Drills);
+    public record BackupPayload(List<VocabCard>? Cards, List<SentenceDrill>? Drills,
+        List<StudyLog>? StudyLogs = null, Dictionary<string, string>? LearningProgress = null);
 }
 
 [ApiController]
@@ -573,6 +624,8 @@ public class SettingsController : ControllerBase
     public async Task<ActionResult<Dictionary<string, string>>> All()
     {
         var all = await _settings.GetAllAsync();
+        // Foundation state has its own API. Old settings clients must not round-trip stale progress.
+        foreach (var key in all.Keys.Where(k => k.StartsWith(LearningController.Prefix)).ToList()) all.Remove(key);
         if (all.TryGetValue("GeminiApiKey", out var k) && !string.IsNullOrEmpty(k))
             all["GeminiApiKey"] = "***" + k[^Math.Min(4, k.Length)..];
         return all;
@@ -583,6 +636,7 @@ public class SettingsController : ControllerBase
     {
         foreach (var (k, v) in values)
         {
+            if (k.StartsWith(LearningController.Prefix)) continue;
             if (k == "GeminiApiKey" && v.StartsWith("***")) continue; // masked, unchanged
             await _settings.SetAsync(k, v ?? string.Empty);
         }

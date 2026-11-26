@@ -17,6 +17,26 @@ export default function Cards({ onCardsChanged }: Props) {
   const [editing, setEditing] = useState<(UpsertCard & { id?: number }) | null>(null);
   const [msg, setMsg] = useState('');
   const [loading, setLoading] = useState(false);
+  const editingOpen = editing !== null;
+
+  useEffect(() => {
+    if (!editingOpen) return;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    dialog?.querySelector<HTMLInputElement>('input')?.focus();
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { event.preventDefault(); setEditing(null); }
+      if (event.key !== 'Tab' || !dialog) return;
+      const focusable = [...dialog.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled)')];
+      const first = focusable[0], last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    };
+    document.addEventListener('keydown', handleKey);
+    return () => { document.body.style.overflow = previousOverflow; document.removeEventListener('keydown', handleKey); previousFocus?.focus(); };
+  }, [editingOpen]);
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
@@ -107,6 +127,7 @@ export default function Cards({ onCardsChanged }: Props) {
       a.href = URL.createObjectURL(blob);
       a.download = `engmastery-backup-${new Date().toISOString().slice(0, 10)}.json`;
       a.click();
+      window.setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     } catch {
       setMsg('Không thể xuất file sao lưu.');
     }
@@ -116,7 +137,7 @@ export default function Cards({ onCardsChanged }: Props) {
     try {
       const payload = JSON.parse(await f.text());
       const r = await api.post('/backup/import', payload);
-      setMsg(`Đã nhập dữ liệu: +${r.data.cardsAdded} thẻ, +${r.data.drillsAdded} câu luyện tập.`);
+      setMsg(`Đã thêm ${r.data.cardsAdded} thẻ, ${r.data.drillsAdded} câu, ${r.data.studyLogsAdded ?? 0} ngày học và ${r.data.progressAdded ?? 0} tiến độ bài học. Dữ liệu đã có được giữ nguyên.`);
       await load(1);
       onCardsChanged?.();
     } catch {
@@ -125,7 +146,7 @@ export default function Cards({ onCardsChanged }: Props) {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="tool-page cards-workbench space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-lg font-bold flex items-center gap-2">
@@ -207,11 +228,11 @@ export default function Cards({ onCardsChanged }: Props) {
       )}
 
       {/* Cards List Grid */}
-      <div className="grid gap-2.5 sm:grid-cols-2">
+      <div className="library-grid grid gap-4 sm:grid-cols-2">
         {cards.map((c) => (
           <div
             key={c.id}
-            className="group flex items-start justify-between gap-3 rounded-2xl border border-slate-200/80 bg-white p-3.5 shadow-sm transition-all hover:border-slate-300 dark:border-slate-800/80 dark:bg-[#111827]"
+            className="library-card group min-w-0 flex items-start justify-between gap-3 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition-[background-color,color,border-color,box-shadow,opacity,transform] hover:border-slate-300 dark:border-slate-800/80 dark:bg-[#111827]"
           >
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
@@ -234,7 +255,7 @@ export default function Cards({ onCardsChanged }: Props) {
                 </div>
               )}
 
-              <div className="mt-2 flex items-center gap-2 text-[10px] text-slate-400">
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-slate-400">
                 <span className="font-semibold text-indigo-600 dark:text-indigo-400">{c.status}</span>
                 <span>•</span>
                 <span>Lặp {c.repetition}</span>
@@ -336,10 +357,11 @@ export default function Cards({ onCardsChanged }: Props) {
       {/* Edit / New Card Modal Drawer */}
       {editing && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-3 sm:p-4 backdrop-blur-sm">
-          <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-3xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-2xl dark:border-slate-800 dark:bg-[#111827]">
+          <div role="dialog" aria-modal="true" aria-label={editing.id ? 'Chỉnh sửa thẻ' : 'Thêm thẻ từ mới'} className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-3xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-2xl dark:border-slate-800 dark:bg-[#111827]">
             <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
               <h3 className="font-bold text-base">{editing.id ? 'Chỉnh sửa thẻ' : 'Thêm thẻ từ mới'}</h3>
               <button
+                aria-label="Đóng cửa sổ thẻ"
                 onClick={() => setEditing(null)}
                 className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300"
               >

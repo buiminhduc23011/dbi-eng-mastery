@@ -289,7 +289,7 @@ export default function Review({ onSessionComplete, deck = 'due', startId = null
   const progress = queue.length > 0 ? Math.round(((index + 1) / queue.length) * 100) : 0;
 
   return (
-    <div className="mx-auto max-w-2xl landscape-sm:max-w-4xl space-y-3.5 sm:space-y-4 landscape-sm:space-y-2">
+    <div className="tool-page review-workbench space-y-5">
       {/* Top Controls Bar */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         {/* Mode Segmented Switch */}
@@ -301,7 +301,7 @@ export default function Review({ onSessionComplete, deck = 'due', startId = null
               setAnswer('');
               setClozeChecked(false);
             }}
-            className={`rounded-xl px-3.5 py-1.5 text-xs font-bold transition-all ${
+            className={`rounded-xl px-3.5 py-1.5 text-xs font-bold transition-[background-color,color,border-color,box-shadow,opacity,transform] ${
               mode === 'flip'
                 ? 'bg-white text-indigo-600 shadow-sm dark:bg-[#111827] dark:text-indigo-400'
                 : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
@@ -316,7 +316,7 @@ export default function Review({ onSessionComplete, deck = 'due', startId = null
               setAnswer('');
               setClozeChecked(false);
             }}
-            className={`rounded-xl px-3.5 py-1.5 text-xs font-bold transition-all ${
+            className={`rounded-xl px-3.5 py-1.5 text-xs font-bold transition-[background-color,color,border-color,box-shadow,opacity,transform] ${
               mode === 'cloze'
                 ? 'bg-white text-indigo-600 shadow-sm dark:bg-[#111827] dark:text-indigo-400'
                 : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
@@ -327,14 +327,14 @@ export default function Review({ onSessionComplete, deck = 'due', startId = null
         </div>
 
         {/* Category & Reload */}
-        <div className="flex items-center gap-1.5 ml-auto">
+        <div className="review-filters flex flex-wrap items-center gap-2 ml-auto">
           <div className="flex rounded-xl bg-slate-200/80 p-0.5 dark:bg-slate-800/80 shadow-inner">
             <button
               onClick={() => {
                 setQueueFilter('due');
                 void load(category, 'due');
               }}
-              className={`rounded-lg px-3 py-1.5 text-[11px] font-bold transition-all ${
+              className={`rounded-lg px-3 py-1.5 text-[11px] font-bold transition-[background-color,color,border-color,box-shadow,opacity,transform] ${
                 queueFilter === 'due'
                   ? 'bg-white text-indigo-600 shadow-sm dark:bg-[#111827] dark:text-indigo-400'
                   : 'text-slate-600 dark:text-slate-400'
@@ -347,7 +347,7 @@ export default function Review({ onSessionComplete, deck = 'due', startId = null
                 setQueueFilter('leeches');
                 void load(category, 'leeches');
               }}
-              className={`rounded-lg px-3 py-1.5 text-[11px] font-bold transition-all ${
+              className={`rounded-lg px-3 py-1.5 text-[11px] font-bold transition-[background-color,color,border-color,box-shadow,opacity,transform] ${
                 queueFilter === 'leeches'
                   ? 'bg-white text-rose-600 shadow-sm dark:bg-[#111827] dark:text-rose-400'
                   : 'text-slate-600 dark:text-slate-400'
@@ -358,6 +358,7 @@ export default function Review({ onSessionComplete, deck = 'due', startId = null
           </div>
           <div className="relative">
             <select
+              aria-label="Chủ đề ôn tập"
               value={category}
               onChange={(e) => {
                 setCategory(e.target.value);
@@ -461,7 +462,7 @@ export default function Review({ onSessionComplete, deck = 'due', startId = null
             {/* Visual Progress Bar */}
             <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
               <div
-                className="h-full rounded-full bg-gradient-to-r from-indigo-600 to-violet-500 transition-all duration-300"
+                className="h-full rounded-full bg-gradient-to-r from-indigo-600 to-violet-500 transition-[background-color,color,border-color,box-shadow,opacity,transform] duration-300"
                 style={{ width: `${progress}%` }}
               />
             </div>
@@ -472,7 +473,7 @@ export default function Review({ onSessionComplete, deck = 'due', startId = null
             <div className="perspective-1000 select-none">
               <div
                 onClick={() => setFlipped((f) => !f)}
-                className={`preserve-3d relative min-h-[350px] sm:min-h-[380px] landscape-sm:min-h-[185px] cursor-pointer rounded-3xl border border-slate-200/80 bg-white p-6 landscape-sm:p-4 shadow-md transition-all duration-500 hover:shadow-lg dark:border-slate-800/80 dark:bg-[#111827] ${
+                className={`preserve-3d relative min-h-[350px] sm:min-h-[380px] landscape-sm:min-h-[185px] cursor-pointer rounded-3xl border border-slate-200/80 bg-white p-6 landscape-sm:p-4 shadow-md transition-[background-color,color,border-color,box-shadow,opacity,transform] duration-500 hover:shadow-lg dark:border-slate-800/80 dark:bg-[#111827] ${
                   flipped ? 'rotate-y-180' : ''
                 }`}
               >
@@ -682,7 +683,7 @@ export default function Review({ onSessionComplete, deck = 'due', startId = null
             /* Tap to reveal CTA for easy one-hand thumb use on phone */
             <button
               onClick={() => setFlipped(true)}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-indigo-600 py-3.5 landscape-sm:py-2 text-sm font-bold text-white shadow-lg shadow-indigo-600/30 transition-all hover:bg-indigo-700 active:scale-98"
+              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-indigo-600 py-3.5 landscape-sm:py-2 text-sm font-bold text-white shadow-lg shadow-indigo-600/30 transition-[background-color,color,border-color,box-shadow,opacity,transform] hover:bg-indigo-700 active:scale-98"
             >
               <span>Lật xem đáp án (Space)</span>
               <ArrowRight size={16} />
@@ -697,7 +698,7 @@ export default function Review({ onSessionComplete, deck = 'due', startId = null
                   <button
                     key={q}
                     onClick={() => rate(q)}
-                    className={`group relative flex flex-col items-center justify-center rounded-2xl py-3 landscape-sm:py-1.5 px-1.5 font-bold shadow-sm transition-all active:scale-95 ${
+                    className={`group relative flex flex-col items-center justify-center rounded-2xl py-3 landscape-sm:py-1.5 px-1.5 font-bold shadow-sm transition-[background-color,color,border-color,box-shadow,opacity,transform] active:scale-95 ${
                       cfg.color
                     } ${isSuggested ? 'ring-2 ring-offset-2 ring-indigo-500 dark:ring-offset-[#0b0f19]' : ''}`}
                   >

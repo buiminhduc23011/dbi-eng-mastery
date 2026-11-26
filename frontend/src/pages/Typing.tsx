@@ -48,6 +48,9 @@ export default function Typing({ onWordMastered }: Props) {
   const [result, setResult] = useState<TypingResult | null>(null);
   const [empty, setEmpty] = useState('');
   const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+  const submittingRef = useRef(false);
   const [mistakesCount, setMistakesCount] = useState(0);
   const [pendingCount, setPendingCount] = useState(0);
   const [autoSpeak, setAutoSpeak] = useState(() => localStorage.getItem('typing:autoSpeak') !== '0');
@@ -90,6 +93,8 @@ export default function Typing({ onWordMastered }: Props) {
   }, []);
 
   const loadNext = useCallback(async (cat: string, m: TypingMode) => {
+    if (submittingRef.current) return;
+    setSubmitError('');
     setLoading(true);
     setEmpty('');
     try {
@@ -157,7 +162,10 @@ export default function Typing({ onWordMastered }: Props) {
   }, []);
 
   const check = async () => {
-    if (!card || !input.trim() || result) return;
+    if (!card || !input.trim() || result || submittingRef.current) return;
+    submittingRef.current = true;
+    setSubmitting(true);
+    setSubmitError('');
     try {
       const r = await api.post<TypingResult>(`/typing/${card.id}/submit`, { userInput: input });
       setResult(r.data);
@@ -181,7 +189,10 @@ export default function Typing({ onWordMastered }: Props) {
       }
       void loadMistakesCount(category);
     } catch {
-      // Error handling
+      setSubmitError('Chưa nhận được kết quả. Kiểm tra kết nối rồi thử lại; câu trả lời của bạn vẫn còn ở đây.');
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
     }
   };
 
@@ -214,7 +225,7 @@ export default function Typing({ onWordMastered }: Props) {
         return (
           <div
             key={i}
-            className={`flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-black transition-all ${
+            className={`flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-black transition-[background-color,color,border-color,box-shadow,opacity,transform] ${
               filled
                 ? 'bg-emerald-500 text-white shadow-sm shadow-emerald-500/50 scale-105'
                 : 'bg-slate-200 text-slate-400 dark:bg-slate-800 dark:text-slate-600'
@@ -228,12 +239,12 @@ export default function Typing({ onWordMastered }: Props) {
   );
 
   return (
-    <div className="mx-auto max-w-2xl landscape-sm:max-w-4xl space-y-4 landscape-sm:space-y-2">
+    <div className="tool-page typing-workbench space-y-5">
       {/* Header Info */}
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-lg font-bold flex items-center gap-2">
           <Keyboard size={20} className="text-indigo-600 dark:text-indigo-400" />
-          Luyện gõ từ vựng
+          Phiên luyện từ
         </h2>
         <div className="flex flex-wrap items-center justify-end gap-1.5">
           {pendingCount > 0 && (
@@ -251,9 +262,11 @@ export default function Typing({ onWordMastered }: Props) {
       </div>
 
       {/* Filter and Next */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="practice-toolbar flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
           <select
+            disabled={submitting}
+            aria-label="Chủ đề luyện gõ"
             value={category}
             onChange={(e) => {
               setCategory(e.target.value);
@@ -273,12 +286,13 @@ export default function Typing({ onWordMastered }: Props) {
 
           <div className="flex rounded-xl bg-slate-200/80 p-0.5 dark:bg-slate-800/80 shadow-inner">
             <button
+              disabled={submitting}
               onClick={() => {
                 setMode('all');
                 clearDelayed();
                 void loadNext(category, 'all');
               }}
-              className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-all ${
+              className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-[background-color,color,border-color,box-shadow,opacity,transform] ${
                 mode === 'all'
                   ? 'bg-white text-indigo-600 shadow-sm dark:bg-[#111827] dark:text-indigo-400'
                   : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
@@ -287,12 +301,13 @@ export default function Typing({ onWordMastered }: Props) {
               Ngẫu nhiên
             </button>
             <button
+              disabled={submitting}
               onClick={() => {
                 setMode('mistakes');
                 clearDelayed();
                 void loadNext(category, 'mistakes');
               }}
-              className={`flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-bold transition-all ${
+              className={`flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-bold transition-[background-color,color,border-color,box-shadow,opacity,transform] ${
                 mode === 'mistakes'
                   ? 'bg-white text-rose-600 shadow-sm dark:bg-[#111827] dark:text-rose-400'
                   : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
@@ -323,6 +338,7 @@ export default function Typing({ onWordMastered }: Props) {
           </button>
 
           <button
+            disabled={submitting}
             onClick={() => loadNext(category, mode)}
             className="rounded-xl border border-slate-200/80 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-800 dark:bg-[#111827] dark:text-slate-300"
           >
@@ -363,7 +379,7 @@ export default function Typing({ onWordMastered }: Props) {
 
       {/* Word Card */}
       {card && !empty && !loading && (
-        <div className="rounded-3xl border border-slate-200/80 bg-white p-5 sm:p-7 landscape-sm:p-4 shadow-md dark:border-slate-800/80 dark:bg-[#111827]">
+        <div className="typing-canvas rounded-3xl border border-slate-200/80 bg-white p-5 sm:p-7 landscape-sm:p-4 shadow-md dark:border-slate-800/80 dark:bg-[#111827]">
           {/* Card Header & Streak Progress */}
           <div className="flex items-center justify-between">
             <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700 dark:bg-indigo-950/80 dark:text-indigo-300">
@@ -376,7 +392,7 @@ export default function Typing({ onWordMastered }: Props) {
           </div>
 
           {/* Word Prompt */}
-          <div className="mt-5 landscape-sm:mt-2 text-center">
+          <div className="typing-prompt text-center">
             <div className="text-2xl sm:text-3xl landscape-sm:text-xl font-extrabold text-slate-900 dark:text-white">
               {result && !result.passed ? result.meaningVi : card.meaningVi}
             </div>
@@ -400,6 +416,8 @@ export default function Typing({ onWordMastered }: Props) {
             <div className="mt-6 landscape-sm:mt-3 space-y-3 landscape-sm:space-y-2">
               <input
                 ref={inputRef}
+                aria-label="Từ hoặc cụm tiếng Anh"
+                disabled={submitting}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => {
@@ -411,11 +429,12 @@ export default function Typing({ onWordMastered }: Props) {
               />
               <button
                 onClick={check}
-                disabled={!input.trim()}
+                disabled={!input.trim() || submitting}
                 className="flex w-full items-center justify-center gap-2 rounded-2xl bg-indigo-600 py-3.5 landscape-sm:py-2 text-sm font-bold text-white shadow-md shadow-indigo-600/25 transition hover:bg-indigo-700 active:scale-98 disabled:opacity-40"
               >
-                <span>Chấm điểm (Enter)</span>
+                <span>{submitting ? 'Đang chấm…' : 'Chấm điểm (Enter)'}</span>
               </button>
+              {submitError && <p role="alert" className="learning-error">{submitError}</p>}
             </div>
           ) : (
             /* Result Panel */

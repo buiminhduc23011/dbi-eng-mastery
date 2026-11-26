@@ -1,63 +1,35 @@
-import { useEffect, useState, useCallback } from 'react';
-import {
-  LayoutDashboard,
-  Layers,
-  PenLine,
-  Mic,
-  Languages,
-  Library,
-  Keyboard,
-  Settings as SettingsIcon,
-  Moon,
-  Sun,
-  Flame,
-  Target,
-  MoreHorizontal,
-  X,
-  ChevronRight,
-} from 'lucide-react';
-import DashboardPage from './pages/Dashboard';
-import Review from './pages/Review';
-import Drills from './pages/Drills';
-import Typing from './pages/Typing';
-import Shadowing from './pages/Shadowing';
-import Translator from './pages/Translator';
-import Cards from './pages/Cards';
-import Settings from './pages/Settings';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
+import { BookOpen, LayoutDashboard, Layers, PenLine, Mic, Languages, Library, Keyboard, Settings as SettingsIcon, Moon, Sun, Flame, Menu, X, Leaf } from 'lucide-react';
 import { api, type Dashboard } from './lib/api';
+import Learn from './pages/Learn';
+import PracticeGuide from './components/PracticeGuide';
+const DashboardPage = lazy(() => import('./pages/Dashboard'));
+const Review = lazy(() => import('./pages/Review'));
+const Drills = lazy(() => import('./pages/Drills'));
+const Typing = lazy(() => import('./pages/Typing'));
+const Shadowing = lazy(() => import('./pages/Shadowing'));
+const Translator = lazy(() => import('./pages/Translator'));
+const Cards = lazy(() => import('./pages/Cards'));
+const Settings = lazy(() => import('./pages/Settings'));
 
-export type TabId = 'dashboard' | 'review' | 'typing' | 'drills' | 'shadowing' | 'translator' | 'cards' | 'settings';
-
-interface TabItem {
-  id: TabId;
-  label: string;
-  shortLabel: string;
-  icon: typeof LayoutDashboard;
-  badgeKey?: 'cardsDue' | 'drillsDue';
-  description?: string;
-}
-
-const PRIMARY_TABS: TabItem[] = [
-  { id: 'dashboard', label: 'Tổng quan', shortLabel: 'Tổng quan', icon: LayoutDashboard },
-  { id: 'review', label: 'Ôn tập', shortLabel: 'Ôn tập', icon: Layers, badgeKey: 'cardsDue' },
-  { id: 'drills', label: 'Luyện câu', shortLabel: 'Luyện câu', icon: PenLine, badgeKey: 'drillsDue' },
-  { id: 'typing', label: 'Gõ từ', shortLabel: 'Gõ từ', icon: Keyboard },
+export type TabId = 'learn' | 'dashboard' | 'review' | 'typing' | 'drills' | 'shadowing' | 'translator' | 'cards' | 'settings';
+const tabs = [
+  { id: 'learn' as const, label: 'Học hôm nay', icon: BookOpen, section: 'HỌC MỖI NGÀY' },
+  { id: 'review' as const, label: 'Ôn tập từ vựng', icon: Layers },
+  { id: 'drills' as const, label: 'Luyện câu', icon: PenLine },
+  { id: 'typing' as const, label: 'Gõ từ & ghi nhớ', icon: Keyboard },
+  { id: 'shadowing' as const, label: 'Nghe & nói', icon: Mic },
+  { id: 'translator' as const, label: 'Câu của tôi', icon: Languages, section: 'GÓC CÁ NHÂN' },
+  { id: 'cards' as const, label: 'Kho thẻ của tôi', icon: Library },
+  { id: 'dashboard' as const, label: 'Tiến bộ của tôi', icon: LayoutDashboard },
+  { id: 'settings' as const, label: 'Cài đặt', icon: SettingsIcon },
 ];
-
-const SECONDARY_TABS: TabItem[] = [
-  { id: 'shadowing', label: 'Phát âm', shortLabel: 'Phát âm', icon: Mic, description: 'Luyện nghe 1.0x / 0.8x & so khớp giọng nói' },
-  { id: 'translator', label: 'Dịch AI', shortLabel: 'Dịch AI', icon: Languages, description: 'Dịch công sở/đời sống & lưu nhanh vào kho thẻ' },
-  { id: 'cards', label: 'Kho thẻ', shortLabel: 'Kho thẻ', icon: Library, description: 'Tìm kiếm, sửa, xoá và xuất/nhập dữ liệu' },
-];
-
-const ALL_TABS: TabItem[] = [...PRIMARY_TABS, ...SECONDARY_TABS];
 
 export default function App() {
-  const [tab, setTab] = useState<TabId>('dashboard');
-  const [dark, setDark] = useState(() => localStorage.getItem('em-theme') !== 'light');
-  const [sheetOpen, setSheetOpen] = useState(false);
-  const [dashData, setDashData] = useState<Dashboard | null>(null);
-  // Which review deck to study: due cards or mistake-only leeches (from Dashboard click).
+  const [tab, setTab] = useState<TabId>('learn');
+  const [dark, setDark] = useState(() => localStorage.getItem('em-theme') === 'dark');
+  const [menu, setMenu] = useState(false);
+  const [dash, setDash] = useState<Dashboard | null>(null);
   const [reviewDeck, setReviewDeck] = useState<'due' | 'leeches'>('due');
   const [reviewStartId, setReviewStartId] = useState<number | null>(null);
   const [reviewKey, setReviewKey] = useState(0);
@@ -66,293 +38,69 @@ export default function App() {
     document.documentElement.classList.toggle('dark', dark);
     localStorage.setItem('em-theme', dark ? 'dark' : 'light');
   }, [dark]);
-
   const refreshDashboard = useCallback(() => {
-    api
-      .get<Dashboard>('/dashboard')
-      .then((r) => setDashData(r.data))
-      .catch(() => undefined);
+    api.get<Dashboard>('/dashboard').then(r => setDash(r.data)).catch(() => undefined);
   }, []);
-
   useEffect(() => {
     refreshDashboard();
-    const interval = window.setInterval(refreshDashboard, 60000);
-    return () => window.clearInterval(interval);
+    const timer = window.setInterval(refreshDashboard, 60000);
+    return () => window.clearInterval(timer);
   }, [refreshDashboard]);
+  useEffect(() => {
+    const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setMenu(false); };
+    window.addEventListener('keydown', close);
+    return () => window.removeEventListener('keydown', close);
+  }, []);
 
   const go = (id: TabId) => {
-    // Normal entry into review always starts from the due deck (fresh session).
-    if (id === 'review') {
-      setReviewDeck('due');
-      setReviewStartId(null);
-      setReviewKey((k) => k + 1);
-    }
-    setTab(id);
-    setSheetOpen(false);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (!window.dispatchEvent(new Event('engmastery:navigate', { cancelable: true }))) return;
+    if (id === 'review') { setReviewDeck('due'); setReviewStartId(null); setReviewKey(k => k + 1); }
+    setTab(id); setMenu(false); window.scrollTo({ top: 0, behavior: 'instant' });
   };
-
-  // Jump straight into review with only the mistake-prone words, starting at the tapped card.
   const goReviewLeeches = (startId?: number) => {
-    setReviewDeck('leeches');
-    setReviewStartId(startId ?? null);
-    setReviewKey((k) => k + 1);
-    setTab('review');
-    setSheetOpen(false);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setReviewDeck('leeches'); setReviewStartId(startId ?? null); setReviewKey(k => k + 1);
+    setTab('review'); setMenu(false); window.scrollTo({ top: 0, behavior: 'instant' });
   };
+  const current = tabs.find(t => t.id === tab)!;
+  const navigation = <nav aria-label="Điều hướng chính">{tabs.map(t => <div key={t.id}>
+    {t.section && <p className="nav-section">{t.section}</p>}
+    <button className={`nav-item ${tab === t.id ? 'active' : ''}`} aria-current={tab === t.id ? 'page' : undefined} onClick={() => go(t.id)}>
+      <t.icon size={19} /><span>{t.label}</span>{t.id === 'review' && !!dash?.cardsDue && <small>{dash.cardsDue > 99 ? '99+' : dash.cardsDue}</small>}
+    </button>
+  </div>)}</nav>;
 
-  const isSecondaryActive = SECONDARY_TABS.some((t) => t.id === tab);
-
-  const getBadge = (key?: 'cardsDue' | 'drillsDue') => {
-    if (!dashData || !key) return null;
-    const count = dashData[key];
-    if (count <= 0) return null;
-    return count > 99 ? '99+' : count;
-  };
-
-  return (
-    <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900 transition-colors duration-200 dark:bg-[#0b0f19] dark:text-slate-100">
-      {/* Top Header */}
-      <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/80 backdrop-blur-md dark:border-slate-800/80 dark:bg-[#0b0f19]/80">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-safe py-2 sm:px-4 sm:py-2.5 landscape-sm:py-1.5">
-          {/* Logo & Brand */}
-          <div
-            className="flex items-center gap-2 shrink-0 cursor-pointer select-none group"
-            onClick={() => go('dashboard')}
-          >
-            <img
-              src="/dbi-logo.svg"
-              alt="DBI"
-              className="h-8 w-8 sm:h-9 sm:w-9 landscape-sm:h-7 landscape-sm:w-7 rounded-xl shadow-xs transition-transform group-hover:scale-105"
-            />
-            <div>
-              <div className="flex items-center gap-1.5 text-sm sm:text-base landscape-sm:text-sm font-extrabold tracking-tight">
-                EngMastery
-              </div>
-              <div className="hidden sm:block landscape-sm:hidden text-[10px] font-medium text-slate-500 dark:text-slate-400">
-                English Learning Lab
-              </div>
-            </div>
-          </div>
-
-          {/* Desktop & Mobile-Landscape Navigation */}
-          <nav className="hidden items-center gap-0.5 rounded-xl border border-slate-200/70 bg-slate-100/80 p-1 dark:border-slate-800/80 dark:bg-slate-900/90 md:flex landscape-sm:flex landscape-sm:overflow-x-auto landscape-sm:no-scrollbar landscape-sm:max-w-[58vw]">
-            {ALL_TABS.map((t) => {
-              const badge = getBadge(t.badgeKey);
-              const active = tab === t.id;
-              return (
-                <button
-                  key={t.id}
-                  onClick={() => go(t.id)}
-                  className={`relative shrink-0 flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 landscape-sm:px-2 landscape-sm:py-1 text-xs font-semibold transition-all duration-150 ${
-                    active
-                      ? 'bg-white text-indigo-600 shadow-sm dark:bg-slate-800 dark:text-indigo-400'
-                      : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100'
-                  }`}
-                >
-                  <t.icon size={14} className={active ? 'stroke-[2.3]' : 'stroke-[1.8]'} />
-                  <span>{t.label}</span>
-                  {badge && (
-                    <span
-                      className={`ml-0.5 rounded-full px-1.5 py-0.2 text-[10px] font-bold leading-tight ${
-                        active
-                          ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/80 dark:text-indigo-300'
-                          : 'bg-indigo-600 text-white dark:bg-indigo-500/90 dark:text-white'
-                      }`}
-                    >
-                      {badge}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </nav>
-
-          {/* Header Quick Stats & Controls */}
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            {/* Streak Badge */}
-            {dashData && dashData.streak > 0 && (
-              <div
-                className="flex items-center gap-1 rounded-lg bg-orange-50 px-2 py-1 text-xs font-bold text-orange-600 border border-orange-200/60 dark:border-orange-900/40 dark:bg-orange-950/40 dark:text-orange-400"
-                title={`${dashData.streak} ngày học liên tiếp!`}
-              >
-                <Flame size={13} className="fill-orange-500 text-orange-500" />
-                <span>{dashData.streak}d</span>
-              </div>
-            )}
-
-            {/* Daily Target Progress Pill */}
-            {dashData && (
-              <div
-                className="hidden sm:flex items-center gap-2 rounded-lg border border-slate-200/70 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
-                title="Tiến độ mục tiêu hôm nay"
-              >
-                <Target size={13} className="text-indigo-500 dark:text-indigo-400 shrink-0" />
-                <span className="font-mono text-[11px]">
-                  {dashData.todayReviewed}/{dashData.dailyTarget}
-                </span>
-                <div className="h-1.5 w-10 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
-                  <div
-                    className="h-full rounded-full bg-indigo-500 transition-all duration-500"
-                    style={{
-                      width: `${Math.min(100, Math.round((dashData.todayReviewed / Math.max(1, dashData.dailyTarget)) * 100))}%`,
-                    }}
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Settings button */}
-            <button
-              onClick={() => go('settings')}
-              className={`flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200/80 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50 hover:text-slate-900 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white ${
-                tab === 'settings' ? 'ring-2 ring-indigo-500/60 text-indigo-600 dark:text-indigo-400' : ''
-              }`}
-              title="Cài đặt hệ thống"
-              aria-label="Cài đặt"
-            >
-              <SettingsIcon size={15} />
-            </button>
-
-            {/* Dark / Light Toggle */}
-            <button
-              onClick={() => setDark((d) => !d)}
-              className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200/80 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50 hover:text-slate-900 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
-              aria-label="Toggle theme"
-              title={dark ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối'}
-            >
-              {dark ? <Sun size={15} className="text-amber-400" /> : <Moon size={15} />}
-            </button>
-          </div>
-        </div>
+  return <div className="app-shell">
+    <a className="skip-link" href="#main-content">Bỏ qua điều hướng</a>
+    <aside className="desktop-sidebar">
+      <button className="brand" onClick={() => go('learn')} aria-label="EngMastery — trang học"><span className="brand-mark"><BookOpen size={24} /></span><span>engmastery<small>mỗi ngày, một chút giỏi hơn.</small></span></button>
+      {navigation}
+      <div className="sidebar-note"><Leaf size={21} /><p>Không cần hoàn hảo.<br /><strong>Chỉ cần tiếp tục.</strong></p></div>
+      <div className="sidebar-bottom"><span>Không gian học của bạn</span><span>v3.0</span></div>
+    </aside>
+    <div className="app-workspace">
+      <header className="workspace-header">
+        <div className="header-location"><button className="icon-button mobile-menu-toggle" aria-label={menu ? 'Đóng menu' : 'Mở menu'} aria-expanded={menu} aria-controls="mobile-menu" onClick={() => setMenu(v => !v)}>{menu ? <X size={22} /> : <Menu size={22} />}</button><span>Không gian học <span className="breadcrumb-divider">/</span> <strong>{current.label}</strong></span></div>
+        <div className="header-actions">{dash && <span className="streak-label"><Flame size={17} /><strong>{dash.streak}</strong><span> ngày liên tiếp</span></span>}<button className="icon-button" onClick={() => setDark(v => !v)} aria-label={dark ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối'}>{dark ? <Sun size={19} /> : <Moon size={19} />}</button><span className="profile-mark" title="Góc học cá nhân">D</span></div>
       </header>
-
-      {/* Main Content Area */}
-      <main key={tab} className="mx-auto w-full max-w-6xl flex-1 px-safe py-4 sm:px-4 sm:py-6 pb-24 md:pb-8 landscape-sm:py-2.5 landscape-sm:pb-4 animate-fade-in-up">
-        {tab === 'dashboard' && <DashboardPage go={go} onRefresh={refreshDashboard} onStudyLeech={goReviewLeeches} />}
-        {tab === 'review' && <Review key={reviewKey} deck={reviewDeck} startId={reviewStartId} reloadKey={reviewKey} onSessionComplete={refreshDashboard} />}
-        {tab === 'typing' && <Typing onWordMastered={refreshDashboard} />}
-        {tab === 'drills' && <Drills onDrillComplete={refreshDashboard} />}
-        {tab === 'shadowing' && <Shadowing />}
-        {tab === 'translator' && <Translator onCardSaved={refreshDashboard} />}
-        {tab === 'cards' && <Cards onCardsChanged={refreshDashboard} />}
-        {tab === 'settings' && <Settings />}
+      {menu && <div className="mobile-menu" id="mobile-menu">{navigation}</div>}
+      <main id="main-content" tabIndex={-1} className={`workspace-content page-${tab} ${tab === 'learn' ? '' : 'tool-content'}`} key={tab}>
+        {tab !== 'learn' && <div className="tool-heading"><p className="eyebrow">KHÔNG GIAN HỌC CỦA BẠN</p><h1>{current.label}</h1><p>{({ review: 'Gặp lại những từ quen, nhớ thêm một chút.', drills: 'Từng câu ngắn, từng ý rõ ràng.', typing: 'Biến điều đã học thành phản xạ.', shadowing: 'Lắng nghe, nói lại. Không cần một giọng hoàn hảo.', translator: 'Bắt đầu từ điều bạn thực sự muốn nói.', cards: 'Những từ và câu bạn đang tích lũy.', dashboard: 'Nhìn lại hành trình, không so sánh với ai khác.', settings: 'Điều chỉnh để học thoải mái hơn.' } as Partial<Record<TabId, string>>)[tab]}</p></div>}
+        <div className={['typing', 'review', 'drills', 'settings'].includes(tab) ? 'page-layout with-guide' : 'page-layout'}><div className="page-primary">
+        <Suspense fallback={<div className="study-surface loading-panel" role="status">Đang mở góc học của bạn…</div>}>
+          {tab === 'learn' && <Learn go={go} onComplete={refreshDashboard} />}
+          {tab === 'dashboard' && <DashboardPage go={go} onRefresh={refreshDashboard} onStudyLeech={goReviewLeeches} />}
+          {tab === 'review' && <Review key={reviewKey} deck={reviewDeck} startId={reviewStartId} reloadKey={reviewKey} onSessionComplete={refreshDashboard} />}
+          {tab === 'typing' && <Typing onWordMastered={refreshDashboard} />}
+          {tab === 'drills' && <Drills onDrillComplete={refreshDashboard} />}
+          {tab === 'shadowing' && <Shadowing />}
+          {tab === 'translator' && <Translator onCardSaved={refreshDashboard} />}
+          {tab === 'cards' && <Cards onCardsChanged={refreshDashboard} />}
+          {tab === 'settings' && <Settings />}
+        </Suspense>
+        </div><PracticeGuide tab={tab} go={go} /></div>
       </main>
-
-      {/* Desktop Footer */}
-      <footer className="hidden md:block border-t border-slate-200/60 dark:border-slate-800/60 py-4 text-center text-xs text-slate-400 dark:text-slate-500">
-        <div className="mx-auto max-w-6xl px-4 flex items-center justify-between">
-          <div>EngMastery · English Learning Lab</div>
-          <div>v2.0.1</div>
-        </div>
-      </footer>
-
-      {/* Mobile Bottom Navigation Bar (Dock — hidden in landscape to save vertical space) */}
-      <nav className="fixed bottom-0 inset-x-0 z-40 block md:hidden landscape-sm:hidden border-t border-slate-200/80 bg-white/90 backdrop-blur-xl dark:border-slate-800/80 dark:bg-[#0b0f19]/95 pb-safe">
-        <div className="grid grid-cols-5 h-14 items-center px-1">
-          {PRIMARY_TABS.map((t) => {
-            const active = tab === t.id;
-            const badge = getBadge(t.badgeKey);
-            return (
-              <button
-                key={t.id}
-                onClick={() => go(t.id)}
-                className={`relative flex flex-col items-center justify-center py-1 transition-all active:scale-95 ${
-                  active
-                    ? 'text-indigo-600 dark:text-indigo-400 font-bold'
-                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-                }`}
-              >
-                <div className="relative">
-                  {active && (
-                    <span className="absolute -top-2 left-1/2 h-0.5 w-5 -translate-x-1/2 rounded-full bg-indigo-600 dark:bg-indigo-400" />
-                  )}
-                  <t.icon size={18} className={active ? 'stroke-[2.4]' : 'stroke-[1.8]'} />
-                  {badge && (
-                    <span className="absolute -top-1.5 -right-2 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-extrabold text-white shadow-sm">
-                      {badge}
-                    </span>
-                  )}
-                </div>
-                <span className="mt-0.5 text-[10px] leading-tight font-medium">{t.shortLabel}</span>
-              </button>
-            );
-          })}
-
-          {/* More Button */}
-          <button
-            onClick={() => setSheetOpen((o) => !o)}
-            className={`relative flex flex-col items-center justify-center py-1 transition-all active:scale-95 ${
-              isSecondaryActive || sheetOpen || tab === 'settings'
-                ? 'text-indigo-600 dark:text-indigo-400 font-bold'
-                : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-            }`}
-          >
-            <MoreHorizontal size={18} />
-            <span className="mt-0.5 text-[10px] leading-tight font-medium">Thêm</span>
-          </button>
-        </div>
-      </nav>
-
-      {/* Mobile "More" Sheet Modal */}
-      {sheetOpen && (
-        <div className="fixed inset-0 z-50 flex flex-col justify-end md:hidden">
-          <div
-            className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm transition-opacity"
-            onClick={() => setSheetOpen(false)}
-          />
-
-          <div className="relative z-10 rounded-t-2xl border-t border-slate-200/80 bg-white p-4 shadow-2xl dark:border-slate-800/80 dark:bg-[#111827] pb-safe max-h-[85vh] overflow-y-auto animate-sheet-up">
-            <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-slate-300 dark:bg-slate-700" />
-
-            <div className="mb-3 flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-bold">Tính năng mở rộng</h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Công cụ học tập & cài đặt</p>
-              </div>
-              <button
-                onClick={() => setSheetOpen(false)}
-                className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300"
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            <div className="grid gap-1.5">
-              {[...SECONDARY_TABS, { id: 'settings' as TabId, label: 'Cài đặt', shortLabel: 'Cài đặt', icon: SettingsIcon, description: 'Cấu hình Gemini API key và mục tiêu' }].map((t) => {
-                const active = tab === t.id;
-                return (
-                  <button
-                    key={t.id}
-                    onClick={() => go(t.id)}
-                    className={`flex items-center gap-3 rounded-xl p-2.5 text-left transition-all ${
-                      active
-                        ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-200'
-                        : 'bg-slate-50 hover:bg-slate-100 dark:bg-slate-800/40 dark:hover:bg-slate-800/80'
-                    }`}
-                  >
-                    <div
-                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
-                        active
-                          ? 'bg-indigo-600 text-white'
-                          : 'bg-white text-slate-700 shadow-sm dark:bg-slate-800 dark:text-slate-200'
-                      }`}
-                    >
-                      <t.icon size={18} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-bold text-xs">{t.label}</div>
-                      <div className="truncate text-[11px] text-slate-500 dark:text-slate-400">{t.description}</div>
-                    </div>
-                    <ChevronRight size={16} className="text-slate-400 shrink-0" />
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
+      <footer className="workspace-footer"><span>ENGMASTERY · LEARN A LITTLE, EVERY DAY</span><span>Học vì mình. Tiến bộ theo cách của mình.</span></footer>
     </div>
-  );
+    <nav className="mobile-dock" aria-label="Truy cập nhanh">{[tabs[0], tabs[1], tabs[2], tabs[5]].map(t => <button key={t.id} aria-current={tab === t.id ? 'page' : undefined} className={tab === t.id ? 'active' : ''} onClick={() => go(t.id)}><t.icon size={21} /><span>{t.id === 'learn' ? 'Hôm nay' : t.id === 'review' ? 'Ôn tập' : t.label}</span></button>)}</nav>
+  </div>;
 }

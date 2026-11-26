@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { api, type AiPolishResult } from '../lib/api';
 import { speak } from '../lib/speech';
+import LessonSession from '../components/LessonSession';
+import type { Lesson } from '../lib/learning';
 import { Loader2, Languages, Plus, Check, Sparkles, Briefcase, Coffee, BookMarked, AlertCircle, Volume2, Copy } from 'lucide-react';
 
 interface Props {
@@ -16,6 +18,30 @@ export default function Translator({ onCardSaved }: Props) {
   const [error, setError] = useState('');
   const [savedMsg, setSavedMsg] = useState('');
   const [copiedKey, setCopiedKey] = useState<'biz' | 'cas' | null>(null);
+  const [sourceText, setSourceText] = useState('');
+  const [practice, setPractice] = useState<Lesson | null>(null);
+  const [sentenceSaved, setSentenceSaved] = useState(false);
+  const [savingSentence, setSavingSentence] = useState(false);
+
+  const saveSentence = async () => {
+    if (!result || sentenceSaved) return;
+    await api.post('/drills', {
+      category: 'My sentences', promptVi: sourceText, targetEn: result.casualEnglish,
+      alternativesEn: [result.businessEnglish], keywords: [],
+      grammarNote: 'Câu cá nhân từ bản dịch. Bản dịch có thể cần kiểm tra lại; điểm offline chỉ so khớp câu mẫu.',
+    });
+    setSentenceSaved(true); onCardSaved?.();
+  };
+  const startPractice = () => {
+    if (!result) return;
+    setPractice({ id: 'personal', title: 'Câu của riêng bạn', stage: 'Cá nhân',
+      goal: 'Luyện điều bạn muốn nói.', pattern: 'Học cả cụm, rồi tự viết lại',
+      explanation: 'Đọc bản dịch và nghĩa bên dưới. Tập ghép câu rồi thử viết lại mà không nhìn mẫu. Đây là bản dịch tự động, không phải bài giảng ngữ pháp đã được biên soạn.',
+      phrases: [{ en: result.casualEnglish, vi: sourceText, blank: '', answer: '',
+        chunks: result.vocabulary.map(v => `${v.term} = ${v.meaningVi}`).join(' · '),
+        note: 'Bạn có thể nghe chậm và xem gợi ý bất cứ lúc nào.', alternatives: [result.businessEnglish] }],
+    });
+  };
 
   const copyText = (text: string, key: 'biz' | 'cas') => {
     navigator.clipboard?.writeText(text).catch(() => undefined);
@@ -24,13 +50,15 @@ export default function Translator({ onCardSaved }: Props) {
   };
 
   const polish = async () => {
-    if (!input.trim()) return;
+    if (!input.trim() || loading) return;
     setLoading(true);
     setError('');
     setSavedMsg('');
     try {
       const r = await api.post<AiPolishResult>('/ai/polish', { rawInput: input });
       setResult(r.data);
+      setSourceText(input.trim());
+      setSentenceSaved(false);
       setSavedSet(new Set());
     } catch {
       setError('Không thực hiện được dịch — vui lòng kiểm tra kết nối mạng hoặc thử lại.');
@@ -64,13 +92,15 @@ export default function Translator({ onCardSaved }: Props) {
     }
   };
 
+  if (practice) return <LessonSession lesson={practice} onExit={() => setPractice(null)} onComplete={saveSentence} exitLabel="Về câu của tôi" savedMessage="Đã lưu câu vào lịch ôn. Mở Luyện câu → Câu của tôi để gặp lại câu này." />;
+
   return (
-    <div className="mx-auto max-w-2xl space-y-4">
+    <div className="tool-page translator-workbench space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-lg font-bold flex items-center gap-2">
           <Languages size={20} className="text-violet-600 dark:text-violet-400" />
-          Dịch & Tạo thẻ từ vựng
+          Viết điều bạn muốn nói
         </h2>
       </div>
 
@@ -89,8 +119,13 @@ export default function Translator({ onCardSaved }: Props) {
       )}
 
       {/* Input Textarea */}
-      <div className="space-y-2">
+      <div className="translation-input study-surface">
+        <label htmlFor="personal-sentence" className="input-label">Ý của bạn · Tiếng Việt hoặc tiếng Anh</label>
         <textarea
+          id="personal-sentence"
+          aria-label="Điều bạn muốn nói bằng tiếng Anh"
+          maxLength={1000}
+          disabled={loading}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
@@ -99,8 +134,8 @@ export default function Translator({ onCardSaved }: Props) {
               void polish();
             }
           }}
-          rows={4}
-          placeholder="Ví dụ: Dự án bị delay 2 ngày do server quá tải, chúng tôi đang scale up và kiểm thử lại… (Ctrl+Enter để dịch)"
+          rows={6}
+          placeholder="Ví dụ: Hôm nay tôi đang sửa một lỗi. Tôi cần thêm thời gian."
           className="w-full rounded-3xl border border-slate-300 bg-white p-4 text-base shadow-sm focus:border-violet-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 leading-relaxed"
         />
 
@@ -114,9 +149,19 @@ export default function Translator({ onCardSaved }: Props) {
         </button>
       </div>
 
+      {!result && <section className="translation-empty study-surface"><Languages size={32} /><h3>Một ý tưởng. Hai cách diễn đạt.</h3><p>Viết điều bạn muốn nói. Bạn sẽ nhận được câu công sở, câu giao tiếp tự nhiên và những từ cần nhớ.</p><div className="translation-example"><span>THỬ MỘT CÂU NGẮN</span><p>“Tôi cần thêm thời gian để hoàn thành công việc.”</p></div><p className="muted">Sau khi dịch, bạn có thể luyện và lưu câu vào lịch ôn.</p></section>}
       {/* Results */}
       {result && (
-        <div className="space-y-3 pt-2 animate-scale-in">
+        <div className="translation-results space-y-4">
+          <section className="personal-practice">
+            <h3>Biến câu này thành điều bạn nhớ</h3>
+            <p>Nghe → hiểu từ → ghép câu → tự viết lại. Hoàn thành bài luyện để lưu câu vào lịch ôn, hoặc lưu ngay bên dưới. Bản dịch tự động có thể chưa chính xác; bạn hãy đọc lại trước khi lưu.</p>
+            <div className="button-row"><button className="primary-button" onClick={startPractice}>Luyện câu này</button><button className="secondary-button" disabled={sentenceSaved || savingSentence} onClick={async () => {
+              setSavingSentence(true); setError('');
+              try { await saveSentence(); } catch { setError('Chưa lưu được câu. Bạn có thể thử lại.'); }
+              finally { setSavingSentence(false); }
+            }}>{sentenceSaved ? 'Đã lưu vào Luyện câu' : savingSentence ? 'Đang lưu…' : 'Lưu câu vào lịch ôn'}</button></div>
+          </section>
           <div className="flex items-center justify-between text-xs">
             {result.usedAi ? (
               <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-3 py-1 font-bold text-violet-700 dark:bg-violet-950 dark:text-violet-300">

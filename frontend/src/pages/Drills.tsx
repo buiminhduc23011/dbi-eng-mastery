@@ -27,6 +27,7 @@ export default function Drills({ onDrillComplete }: Props) {
   const [listening, setListening] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [personalOnly, setPersonalOnly] = useState(false);
   const [autoSpeak, setAutoSpeak] = useState(() => localStorage.getItem('drills:autoSpeak') !== '0');
   const nextBtnRef = useRef<HTMLButtonElement>(null);
 
@@ -45,23 +46,19 @@ export default function Drills({ onDrillComplete }: Props) {
     if (result) nextBtnRef.current?.focus();
   }, [result]);
 
-  const load = async () => {
-    setLoading(true);
-    try {
-      const r = await api.get<SentenceDrill[]>('/drills/due', { params: { take: 30 } });
-      setDrills(r.data);
-      if (!current && r.data.length > 0) pick(r.data[0]);
-    } catch {
-      setError('Không kết nối được với máy chủ backend.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    load();
+    const controller = new AbortController();
+    api.get<SentenceDrill[]>(personalOnly ? '/drills' : '/drills/due', {
+      params: personalOnly ? { category: 'My sentences', take: 100 } : { take: 30 }, signal: controller.signal,
+    }).then(r => {
+      setDrills(r.data);
+      if (r.data.length) pick(r.data[0]);
+      else setCurrent(null);
+    }).catch(() => { if (!controller.signal.aborted) setError('Không kết nối được với máy chủ backend.'); })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [personalOnly]);
 
   const pick = (d: SentenceDrill) => {
     setCurrent(d);
@@ -122,7 +119,7 @@ export default function Drills({ onDrillComplete }: Props) {
   };
 
   return (
-    <div className="mx-auto max-w-3xl landscape-sm:max-w-5xl space-y-4 landscape-sm:space-y-2">
+    <div className="tool-page drills-workbench space-y-5">
       {/* Header Info */}
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-lg font-bold flex items-center gap-2">
@@ -144,6 +141,12 @@ export default function Drills({ onDrillComplete }: Props) {
       </div>
 
       {/* Due Drills Horizontal Chip Slider */}
+      <div className="button-row" aria-label="Nguồn câu luyện tập">
+        {[false, true].map(personal => <button key={String(personal)} className={personalOnly === personal ? 'primary-button' : 'secondary-button'} aria-pressed={personalOnly === personal} onClick={() => {
+          if (personalOnly === personal) return;
+          setLoading(true); setCurrent(null); setDrills([]); setError(''); setResult(null); setAi(null); setPersonalOnly(personal);
+        }}>{personal ? 'Câu của tôi' : 'Câu đến lịch ôn'}</button>)}
+      </div>
       <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
         <span className="shrink-0 text-xs font-semibold text-slate-400 mr-1">Danh sách câu:</span>
         {drills.map((d, i) => {
@@ -154,7 +157,7 @@ export default function Drills({ onDrillComplete }: Props) {
             <button
               key={d.id}
               onClick={() => pick(d)}
-              className={`shrink-0 flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold transition-all active:scale-95 ${
+              className={`shrink-0 flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold transition-[background-color,color,border-color,box-shadow,opacity,transform] active:scale-95 ${
                 isSelected
                   ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/30'
                   : 'border border-slate-200/80 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-800 dark:bg-[#111827] dark:text-slate-300'
@@ -166,13 +169,12 @@ export default function Drills({ onDrillComplete }: Props) {
             </button>
           );
         })}
-        {!loading && drills.length === 0 && (
+        {!loading && !error && drills.length === 0 && (
           <span className="rounded-xl bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
-            Đã hoàn thành hết tất cả câu luyện tập! 🎉
+            {personalOnly ? 'Chưa có câu riêng. Mở “Câu của tôi” trong menu, dịch một ý rồi lưu vào lịch ôn nhé.' : 'Hôm nay chưa có câu đến lịch ôn. Bạn có thể học một bài nền tảng hoặc luyện câu riêng.'}
           </span>
         )}
       </div>
-
       {error && (
         <div className="rounded-2xl bg-red-100 p-3 text-xs font-bold text-red-700 dark:bg-red-950 dark:text-red-300 flex items-center gap-2">
           <AlertCircle size={16} />
@@ -277,6 +279,7 @@ export default function Drills({ onDrillComplete }: Props) {
           {result && (
             <div className="mt-5 space-y-4 rounded-2xl border border-slate-200/80 bg-slate-50/80 p-4 sm:p-5 dark:border-slate-800 dark:bg-slate-800/40 animate-scale-in">
               {/* Score Header */}
+              <p className="text-sm text-slate-600 dark:text-slate-300">Điểm dưới đây là độ khớp với câu mẫu, không phải điểm ngữ pháp. Một cách viết khác vẫn có thể đúng. Bạn có thể nhờ AI giải thích thêm bằng tiếng Việt.</p>
               <div className="flex items-center gap-3.5">
                 <div
                   className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white text-2xl font-black shadow-sm dark:bg-slate-900 ${scoreColor(
@@ -316,7 +319,7 @@ export default function Drills({ onDrillComplete }: Props) {
                 <div className="flex items-start justify-between gap-2 rounded-xl bg-white p-3 shadow-sm dark:bg-slate-900">
                   <div>
                     <div className="font-bold text-emerald-700 dark:text-emerald-400">
-                      Đáp án chuẩn: {result.targetEn}
+                      Câu mẫu tham khảo: {result.targetEn}
                     </div>
                     {result.alternativesEn.map((a) => (
                       <div key={a} className="mt-0.5 text-slate-500">
@@ -355,10 +358,10 @@ export default function Drills({ onDrillComplete }: Props) {
                 <div className="rounded-2xl border border-violet-200 bg-white p-4 shadow-sm dark:border-violet-900 dark:bg-slate-900 space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2.5 py-0.5 text-xs font-bold text-violet-700 dark:bg-violet-950 dark:text-violet-300">
-                      <Sparkles size={13} /> Nhận xét từ Gemini AI
+                      <Sparkles size={13} /> {ai.usedAi ? 'Nhận xét từ Gemini AI' : 'So khớp offline — chưa dùng AI'}
                     </span>
                     <span className="text-xs text-slate-400">
-                      Ngữ pháp: {ai.grammarScore}/100 · Tự nhiên: {ai.naturalnessScore}/100
+                      {ai.usedAi ? `Ngữ pháp: ${ai.grammarScore}/100 · Tự nhiên: ${ai.naturalnessScore}/100` : 'Cần cấu hình AI để nhận xét ngữ pháp'}
                     </span>
                   </div>
 

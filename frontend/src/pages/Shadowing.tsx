@@ -82,12 +82,12 @@ export default function Shadowing() {
   const pct = marks.length ? Math.round((hitCount / marks.length) * 100) : 0;
 
   return (
-    <div className="mx-auto max-w-2xl landscape-sm:max-w-5xl space-y-4 landscape-sm:space-y-2.5">
+    <div className="tool-page shadowing-workbench space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-lg font-bold flex items-center gap-2">
           <Headphones size={20} className="text-indigo-600 dark:text-indigo-400" />
-          Luyện phát âm & Shadowing
+          Phòng luyện nói
         </h2>
         {mistakeOnlyCount > 0 && (
           <span className="rounded-full bg-rose-100 px-2.5 py-1 text-[11px] font-bold text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">
@@ -109,8 +109,9 @@ export default function Shadowing() {
         </div>
       )}
 
+      {!loading && !item && !error && <div className="study-surface empty-studio"><Headphones size={36} /><h3>Chưa có câu để luyện nói</h3><p>Thêm thẻ có câu ví dụ hoặc lưu một câu trong “Câu của tôi” để bắt đầu.</p></div>}
       {item && (
-        <div className="space-y-4 landscape-sm:space-y-0 landscape-sm:grid landscape-sm:grid-cols-2 landscape-sm:gap-3 landscape-sm:items-start">
+        <div className="voice-studio">
           {/* Sentence Display Card */}
           <div className="rounded-3xl border border-slate-200/80 bg-white p-6 sm:p-7 landscape-sm:p-4 text-center shadow-md dark:border-slate-800/80 dark:bg-[#111827]">
             <span className="inline-block rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300 max-w-full truncate">
@@ -163,6 +164,7 @@ export default function Shadowing() {
 
           {/* Voice Record & Matching Studio */}
           <div className="rounded-3xl border border-slate-200/80 bg-white p-5 sm:p-6 landscape-sm:p-4 shadow-md dark:border-slate-800/80 dark:bg-[#111827]">
+            <div className="studio-heading"><span className="guide-kicker">ĐẾN LƯỢT BẠN</span><h3>Nghe. Nhắc lại. Tự tin hơn.</h3><p>Đọc câu bên cạnh sau khi nghe mẫu. Kết quả khớp từ chỉ mang tính tham khảo, không phải điểm phát âm.</p></div>
             {speechSupported() ? (
               <button
                 onClick={record}
@@ -174,7 +176,7 @@ export default function Shadowing() {
                 }`}
               >
                 <Mic size={18} className={listening ? 'animate-bounce' : ''} />
-                <span>{listening ? 'Đang lắng nghe… Hãy đọc ngay!' : '🎤 Bắt đầu ghi âm Shadowing'}</span>
+                <span>{listening ? 'Đang lắng nghe… Hãy đọc ngay!' : 'Bắt đầu nói'}</span>
               </button>
             ) : (
               <div className="rounded-2xl bg-amber-50 p-4 text-xs font-medium text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">

@@ -151,13 +151,16 @@ public class GeminiService
         }
 
         string prompt = $$"""
-            You are an English coach for a Vietnamese software/automation engineer.
+            You are a patient English coach for a Vietnamese beginner who also works in engineering.
+            Explain in simple Vietnamese. Distinguish meaning, grammar, spelling and valid alternative phrasing.
+            Do not penalize a correct paraphrase just because it differs from the reference.
+            Correct at most two important issues, explain why, then give one short sentence to try next.
             User's sentence: "{{userEn}}"
             Reference native sentence: "{{targetEn}}"
             Vietnamese context: "{{contextVi}}"
             Return ONLY valid JSON (no markdown fences) with keys:
             {"corrected": "<best corrected sentence>", "grammarScore": 0-100, "naturalnessScore": 0-100,
-              "feedback": "<2-3 concise sentences, may include Vietnamese>", 
+              "feedback": "<3 concise sentences in Vietnamese: issue type, simple reason, one practice prompt>",
               "casualVersions": ["<v1>", "<v2>"], "professionalVersions": ["<v1>", "<v2>"]}
             """;
         var json = await GenerateWithFallbackAsync(model, key, prompt, ct);
@@ -185,6 +188,8 @@ public class GeminiService
             {"businessEnglish": "<professional workplace version>", "casualEnglish": "<friendly casual version>",
               "vocabulary": [{"term": "<key word/phrase>", "meaningVi": "<nghĩa tiếng Việt>", "exampleSentence": "<short example>"}]}
             Include 3-5 vocabulary items max.
+            The learner is a beginner. Use short everyday sentences in casualEnglish, preferably 3-8 words each.
+            Preserve the meaning; do not add facts. Vocabulary explanations must be simple Vietnamese.
             """;
         var json = await GenerateWithFallbackAsync(model, key, prompt, ct);
         var doc = JsonDocument.Parse(StripFences(json));
