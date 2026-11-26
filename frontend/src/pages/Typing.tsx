@@ -440,7 +440,7 @@ export default function Typing({ onWordMastered }: Props) {
                     🎉 ĐÃ THUỘC LÒNG! (Chuỗi 5/5)
                   </div>
                   <div className="text-xs text-emerald-700 dark:text-emerald-300">
-                    Từ này đã vào vùng trí nhớ dài hạn. Hệ thống sẽ giãn cách kiểm tra lại sau {result.nextIntervalDays ?? 30} ngày để củng cố.
+                    Từ này đã vào vùng trí nhớ dài hạn.
                   </div>
                 </div>
               ) : result.passed ? (
@@ -449,16 +449,8 @@ export default function Typing({ onWordMastered }: Props) {
                     <CheckCircle2 size={18} className="text-emerald-600 dark:text-emerald-400" />
                     <span>Chính xác! Đáp án: <span className="font-mono underline">{result.correctTerm}</span></span>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2.5 text-xs text-emerald-700 dark:text-emerald-300">
-                    <span>Cấp độ: <b>{result.streak}/5</b></span>
-                    <span>·</span>
-                    {result.countedToday ? (
-                      <span>Khoảng cách ôn tiếp theo: <b>sau {result.nextIntervalDays ?? (result.streak * 2)} ngày</b></span>
-                    ) : result.retried ? (
-                      <span className="text-slate-500 dark:text-slate-400 italic">(Đúng sau khi gõ lại — không cộng cấp, cấp hiện tại được giữ nguyên)</span>
-                    ) : (
-                      <span className="text-slate-500 dark:text-slate-400 italic">(Lượt luyện xoay vòng — không cộng dồn ngày)</span>
-                    )}
+                  <div className="text-xs text-emerald-700 dark:text-emerald-300">
+                    Cấp độ: <b>{result.streak}/5</b>
                   </div>
                 </div>
               ) : result.nearMiss ? (
