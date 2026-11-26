@@ -2,6 +2,20 @@ import axios from 'axios';
 
 export const api = axios.create({ baseURL: '/api' });
 
+// Session cookie expired or was removed: send the user back to the password gate.
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const status = error?.response?.status;
+    const url: string = error?.config?.url ?? '';
+    if (status === 401 && !url.startsWith('/auth/') && !window.location.pathname.startsWith('/login')) {
+      const next = window.location.pathname + window.location.search;
+      window.location.replace('/login?next=' + encodeURIComponent(next));
+    }
+    return Promise.reject(error);
+  },
+);
+
 export interface VocabCard {
   id: number;
   term: string;

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../lib/api';
-import { KeyRound, Save, Check, Target, Sliders, RefreshCw, AlertTriangle } from 'lucide-react';
+import { KeyRound, Save, Check, Target, Sliders, RefreshCw, AlertTriangle, LogOut, ShieldCheck } from 'lucide-react';
 
 interface AiModel {
   id: string;
@@ -24,6 +24,7 @@ export default function Settings() {
   const [modelsFromApi, setModelsFromApi] = useState(false);
   const [msg, setMsg] = useState('');
   const [saving, setSaving] = useState(false);
+  const [session, setSession] = useState<{ authenticated: boolean; enabled: boolean } | null>(null);
 
   const applyModels = useCallback((data: { fromApi: boolean; models: AiModel[] }) => {
     if (data.models?.length) {
@@ -51,6 +52,10 @@ export default function Settings() {
       .get<{ fromApi: boolean; models: AiModel[] }>('/ai/models')
       .then((r) => applyModels(r.data))
       .catch(() => applyModels({ fromApi: false, models: FALLBACK_MODELS }));
+    api
+      .get<{ authenticated: boolean; enabled: boolean }>('/auth/session')
+      .then((r) => setSession(r.data))
+      .catch(() => undefined);
   }, [applyModels]);
 
   const save = async () => {
@@ -73,6 +78,14 @@ export default function Settings() {
       setMsg('Lỗi khi lưu cấu hình.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const signOut = async () => {
+    try {
+      await api.post('/auth/logout');
+    } finally {
+      window.location.replace('/login');
     }
   };
 
@@ -211,6 +224,25 @@ export default function Settings() {
         <Save size={15} />
         <span>{saving ? 'Đang lưu…' : 'Lưu cấu hình'}</span>
       </button>
+
+      {session?.enabled && (
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900/80">
+          <h3 className="flex items-center gap-2 font-bold text-sm">
+            <ShieldCheck size={16} className="text-emerald-600 dark:text-emerald-400" />
+            <span>Phiên đăng nhập</span>
+          </h3>
+          <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+            Thiết bị này đang được ghi nhớ và sẽ hỏi lại mật khẩu sau mỗi 7 ngày. Đăng xuất nếu dùng máy chung.
+          </p>
+          <button
+            onClick={signOut}
+            className="mt-3.5 flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white py-2.5 text-xs sm:text-sm font-bold text-slate-700 transition hover:bg-slate-50 active:scale-98 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200 dark:hover:bg-slate-800"
+          >
+            <LogOut size={15} />
+            <span>Đăng xuất</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }

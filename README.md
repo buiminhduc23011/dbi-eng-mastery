@@ -63,6 +63,24 @@ cd frontend; npm install; npm run dev
 | `ConnectionStrings:Sqlite` | `Data Source=engmastery.db` | file path |
 | `ConnectionStrings:SqlServer` | empty | e.g. `Server=192.168.11.101,1433;Database=EngMastery;User Id=sa;Password=...;TrustServerCertificate=True` |
 | `Urls` | `http://*:8090` | listening port |
+| `Auth:Password` | empty | access-gate password (or use `Auth:PasswordHash`) |
+| `Auth:SessionDays` | `7` | days before a device is asked for the password again |
+| `Cors:AllowedOrigins` | `[]` | extra cross-origin origins; empty = same-origin only |
+
+### Access gate (password)
+
+Every page and every `/api/*` route is blocked until the visitor signs in with the access password; a device stays signed in for `Auth:SessionDays` (7 by default). Set the password via environment variable — never commit it:
+
+```powershell
+$env:Auth__Password = "a-long-random-passphrase"   # plain text
+dotnet run --project backend/EngMastery.Api
+
+# or a PBKDF2 hash (preferred — the hash is useless to an attacker who reads the config):
+dotnet run --project backend/EngMastery.Api -- --hash-password "a-long-random-passphrase"
+# -> Auth__PasswordHash=pbkdf2-sha256$...
+```
+
+If no password is configured, the app **refuses to start in Production** (development only: gate off + warning). Failed logins are rate-limited per IP (5 tries → 15 min lockout), and changing the password instantly invalidates every existing device cookie.
 
 Gemini key is stored in the `AppSetting` table via **Settings page** in the UI. The model picker is populated live from `GET /api/ai/models` (Gemini `v1beta/models`, text models with `generateContent`), so renamed/retired models show up automatically; if no key is set it falls back to the built-in list (`gemini-3.6-flash` by default). Stored ids that Google has retired are migrated to the current default on startup. Calls are capped at 15s for the chosen model and fall back to `gemini-3.5-flash-lite`; a model that just failed is skipped for 30 minutes so the next call is fast.
 
@@ -82,8 +100,10 @@ For SQL Server: uncomment the `mssql` service + switch provider env vars in `doc
 Single service on port **8090** — the API also serves the React build from `wwwroot`:
 
 ```powershell
-# One-time on home-server:
+# One-time on home-server (SSH key auth already set up):
 #   sudo cp deploy/engmastery.service /etc/systemd/system/
+#   sudo install -m 0440 -o root -g root deploy/sudoers.engmastery /etc/sudoers.d/engmastery-deploy
+#   sudo visudo -cf /etc/sudoers.d/engmastery-deploy
 #   sudo systemctl enable engmastery
 
 # Deploy from this PC:
@@ -91,9 +111,48 @@ Single service on port **8090** — the API also serves the React build from `ww
 # -> http://home-server:8090
 ```
 
+The deploy needs only your SSH key plus `sudo` for five exact commands (see
+`deploy/sudoers.engmastery`): copy the service file, `daemon-reload`, `enable`, `stop`, `start`.
+No server password is stored in the repo or the script. Everything else (database backup,
+`server/` swap, permissions) runs as `ducne`.
+
 The script publishes `linux-x64` self-contained, builds the frontend into `wwwroot`,
 `scp`s to `/tmp`, preserves `engmastery.db`, swaps `/home/ducne/engmastery/server`,
 and restarts the service.
+
+On the **first** deploy it generates a random access password and prints it once:
+
+```
+=== EngMastery access password (save this once) ===
+Auth__Password=...
+==================================================
+```
+
+It is stored at `/home/ducne/engmastery/data/auth.env` (chmod 600, outside the repo and
+outside the replaced `server/` folder), so it survives every deploy. To view or change it:
+
+```bash
+ssh home-server "cat ~/engmastery/data/auth.env"          # view
+ssh home-server "nano ~/engmastery/data/auth.env"         # change, then:
+ssh home-server "sudo systemctl restart engmastery"
+```
+
+Changing the password signs out every device immediately.
+
+**Forgot the password?** There is no email/OTP reset — the only way in is server access (which
+you already have for deploying). Either read the current one, or set a new one:
+
+```bash
+# read it
+ssh home-server "cat ~/engmastery/data/auth.env"
+
+# or reset it (any password you like; quote shell-special characters)
+ssh home-server "umask 077; printf 'Auth__Password=%s\n' 'my-new-password' > ~/engmastery/data/auth.env; chmod 600 ~/engmastery/data/auth.env"
+ssh home-server "sudo systemctl restart engmastery"
+```
+
+If you lose SSH access too, the fallback is physical access to the home-server (console/TTY),
+then the same commands. Consider exporting the generated `auth.env` into your password manager.
 
 ## API map
 
@@ -105,6 +164,7 @@ and restarts the service.
 - `GET /api/dashboard` · `POST /api/dashboard/log-time`
 - `GET /api/backup/export` · `POST /api/backup/import`
 - `GET/PUT /api/settings`
+- `POST /api/auth/login {password}` · `POST /api/auth/logout` · `GET /api/auth/session`
 
 ## Typing practice
 

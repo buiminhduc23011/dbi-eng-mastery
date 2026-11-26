@@ -1,0 +1,14 @@
+# Passwordless sudo for the EngMastery deploy script — only the handful of root
+# commands it actually needs. Install once on home-server:
+#
+#   sudo install -m 0440 -o root -g root sudoers.engmastery /etc/sudoers.d/engmastery-deploy
+#   sudo visudo -cf /etc/sudoers.d/engmastery-deploy
+#
+# Everything else in deploy-to-home-server.ps1 (database backup, server/ swap,
+# chmod, restarting the app) runs as the normal user.
+
+ducne ALL=(root) NOPASSWD: /usr/bin/cp -f /tmp/engmastery.service /etc/systemd/system/engmastery.service
+ducne ALL=(root) NOPASSWD: /usr/bin/systemctl daemon-reload
+ducne ALL=(root) NOPASSWD: /usr/bin/systemctl enable engmastery
+ducne ALL=(root) NOPASSWD: /usr/bin/systemctl stop engmastery
+ducne ALL=(root) NOPASSWD: /usr/bin/systemctl start engmastery

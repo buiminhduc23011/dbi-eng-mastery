@@ -1,6 +1,15 @@
+using EngMastery.Api.Auth;
 using EngMastery.Api.Data;
 using EngMastery.Api.Services;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
+
+// Utility: `dotnet run -- --hash-password "my secret"` prints a hash for Auth__PasswordHash.
+if (args.Length == 2 && args[0] == "--hash-password")
+{
+    Console.WriteLine(AccessGate.HashPassword(args[1]));
+    return;
+}
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -27,10 +36,41 @@ builder.Services.AddScoped<SettingsService>();
 builder.Services.AddScoped<StudyLogService>();
 builder.Services.AddScoped<GeminiService>();
 
+// Single-user password gate (cookie valid for Auth:SessionDays). See deploy/README notes.
+builder.Services.Configure<AccessGateOptions>(builder.Configuration.GetSection("Auth"));
+builder.Services.AddSingleton<AccessGate>();
+
+// Behind Cloudflare Tunnel / nginx the real scheme and client IP arrive in X-Forwarded-*.
+builder.Services.Configure<ForwardedHeadersOptions>(opt =>
+{
+    opt.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    opt.KnownNetworks.Clear();
+    opt.KnownProxies.Clear();
+});
+
+// Same-origin SPA needs no CORS. Only add the policy when origins are explicitly configured.
+string[] allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
 builder.Services.AddCors(opt => opt.AddDefaultPolicy(p =>
-    p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
+{
+    if (allowedOrigins.Length > 0)
+        p.WithOrigins(allowedOrigins).AllowAnyHeader().AllowAnyMethod().AllowCredentials();
+}));
 
 var app = builder.Build();
+
+var accessGate = app.Services.GetRequiredService<AccessGate>();
+if (!accessGate.HasCredential)
+{
+    if (accessGate.Enabled && !app.Environment.IsDevelopment())
+        throw new InvalidOperationException(
+            "Access gate is enabled but no password is configured. Set Auth__Password (or Auth__PasswordHash) " +
+            "in the service environment before exposing this instance.");
+    app.Logger.LogWarning("Access gate disabled: no Auth:Password configured (allowed only for local development).");
+}
+else if (!accessGate.Enabled)
+{
+    app.Logger.LogWarning("Access gate is explicitly disabled (Auth:Enabled=false). The app is open to anyone with the URL.");
+}
 
 // SQLite data file must live outside folders replaced by deploy (server/ is wiped each release).
 // Relative paths resolve against the app base directory; the folder is auto-created.
@@ -70,7 +110,9 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseForwardedHeaders();
 app.UseCors();
+app.UseMiddleware<AccessGateMiddleware>();
 
 // Serve the React SPA (frontend/dist copied to wwwroot) for home-server single-port deploy.
 app.UseDefaultFiles();

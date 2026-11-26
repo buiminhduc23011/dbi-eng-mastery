@@ -2,7 +2,7 @@
 bin/
 obj/
 out/
-dist-engmastery/
+dist-engmastery*/
 
 node_modules/
 frontend/dist/

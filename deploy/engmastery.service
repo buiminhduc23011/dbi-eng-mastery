@@ -11,6 +11,8 @@ Restart=always
 RestartSec=5
 Environment=ASPNETCORE_URLS=http://*:8090
 Environment="ConnectionStrings__Sqlite=Data Source=/home/ducne/engmastery/data/engmastery.db"
+# Access gate password lives outside the repo/release: /home/ducne/engmastery/data/auth.env
+EnvironmentFile=-/home/ducne/engmastery/data/auth.env
 # --- SQL Server alternative ---
 # Environment=Database__Provider=sqlserver
 # Environment=ConnectionStrings__SqlServer=Server=192.168.11.101,1433;Database=EngMastery;User Id=sa;Password=ChangeMe_12345;TrustServerCertificate=True

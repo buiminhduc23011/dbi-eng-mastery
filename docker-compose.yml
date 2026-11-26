@@ -9,6 +9,9 @@ services:
       # SQLite (default, zero-config). Data persisted in ./data volume.
       - ConnectionStrings__Sqlite=Data Source=/app/data/engmastery.db
       - Database__Provider=sqlite
+      # Access gate: set a password before exposing this outside the LAN.
+      # - Auth__Password=${ENGMASTERY_PASSWORD:?set ENGMASTERY_PASSWORD}
+      # - Auth__PasswordHash=pbkdf2-sha256$210000$...$...
       # --- SQL Server alternative: uncomment + set password, and switch provider ---
       # - Database__Provider=sqlserver
       # - ConnectionStrings__SqlServer=Server=mssql,1433;Database=EngMastery;User Id=sa;Password=ChangeMe_12345;TrustServerCertificate=True
