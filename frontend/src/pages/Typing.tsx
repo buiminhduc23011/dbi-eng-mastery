@@ -39,9 +39,6 @@ interface DelayedCard {
   remaining: number;
 }
 
-/** Ngân sách lượt/ngày theo cấp phản xạ — khớp với backend. */
-const maxAttemptsForLevel = (level: number) => (level <= 1 ? 3 : level === 2 ? 2 : 1);
-
 export default function Typing({ onWordMastered }: Props) {
   const [category, setCategory] = useState('');
   const [mode, setMode] = useState<TypingMode>('all');
@@ -414,13 +411,6 @@ export default function Typing({ onWordMastered }: Props) {
               />
               <p className="text-center text-[11px] text-slate-400 dark:text-slate-500">
                 Không phân biệt hoa thường, không cần dấu câu <span className="font-mono">... ? ! . , ' -</span> — chỉ cần đúng từ.
-              </p>
-              <p className="text-center text-[11px] text-slate-400 dark:text-slate-500">
-                Gõ đúng nghĩa bằng cách nói khác vẫn được ghi nhận (không tính là gõ sai), nhưng chỉ đúng cụm mục tiêu mới cộng cấp độ.
-              </p>
-              <p className="text-center text-[11px] text-slate-400 dark:text-slate-500">
-                Sai thì từ quay lại sau {REQUEUE_GAP} thẻ khác (không chép được đáp án). Cấp 1: {maxAttemptsForLevel(1)} lượt/ngày
-                · cấp 2: {maxAttemptsForLevel(2)} lượt · cấp 3–5: {maxAttemptsForLevel(3)} lượt.
               </p>
               <button
                 onClick={check}
